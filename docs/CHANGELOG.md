@@ -56,3 +56,7 @@
 - Menyelesaikan seluruh operasi API CRUD (`index`, `store`) untuk entitas `Meeting`, `MeetingAttendance`, `Document`, dan `Warning`.
 - Mendaftarkan rute API terkait ke dalam `routes/api.php`.
 - Melengkapi *Test Suite* (TDD) untuk memvalidasi operasi *read* dan *create* pada seluruh entitas pendukung.
+## [2026-08-20]
+### Added
+- Mengamankan seluruh arsitektur CRUD dengan pengujian otomatis. Menghasilkan 13 test dan 60 assertions yang tervalidasi sukses.
+- Menutup Fase 2 (Core Domain) dengan integrasi penuh antara database, logika controller, dan rute API.
