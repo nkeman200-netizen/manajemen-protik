@@ -7,11 +7,22 @@ use Illuminate\Http\Request;
 
 class DocumentController extends Controller
 {
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-        $documents = Document::with(['creator', 'event'])->latest()->get();
+        $documents = Document::with(['creator', 'event'])
+            ->when($request->search, fn ($q, $search) =>
+                $q->where(fn ($q) =>
+                    $q->where('letter_number', 'like', "%{$search}%")
+                      ->orWhere('title', 'like', "%{$search}%")
+                )
+            )
+            ->when($request->event_id, fn ($q, $eventId) =>
+                $q->where('event_id', $eventId)
+            )
+            ->latest()
+            ->paginate(15);
 
-        return response()->json(['message' => 'Success', 'data' => $documents]);
+        return response()->json($documents);
     }
 
     public function store(Request $request): JsonResponse

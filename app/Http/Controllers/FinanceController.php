@@ -9,6 +9,27 @@ use Illuminate\Validation\ValidationException;
 
 class FinanceController extends Controller
 {
+    public function index(Request $request): JsonResponse
+    {
+        $finances = Finance::with(['user', 'event'])
+            ->when($request->search, fn ($q, $search) =>
+                $q->where('description', 'like', "%{$search}%")
+            )
+            ->when($request->type, fn ($q, $type) =>
+                $q->where('type', $type)
+            )
+            ->when($request->event_id, fn ($q, $eventId) =>
+                $q->where('event_id', $eventId)
+            )
+            ->when($request->start_date && $request->end_date, fn ($q) =>
+                $q->whereBetween('date', [$request->start_date, $request->end_date])
+            )
+            ->latest('date')
+            ->paginate(15);
+
+        return response()->json($finances);
+    }
+
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([

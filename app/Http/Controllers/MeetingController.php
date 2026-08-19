@@ -7,11 +7,16 @@ use Illuminate\Http\Request;
 
 class MeetingController extends Controller
 {
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-        $meetings = Meeting::with('attendances')->latest('date')->get();
+        $meetings = Meeting::with('attendances')
+            ->when($request->search, fn ($q, $search) =>
+                $q->where('title', 'like', "%{$search}%")
+            )
+            ->latest('date')
+            ->paginate(15);
 
-        return response()->json(['message' => 'Success', 'data' => $meetings]);
+        return response()->json($meetings);
     }
 
     public function store(Request $request): JsonResponse

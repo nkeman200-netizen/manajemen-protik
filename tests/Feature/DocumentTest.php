@@ -36,8 +36,10 @@ class DocumentTest extends TestCase
         $response->assertStatus(200);
         $response->assertJsonCount(3, 'data');
         $response->assertJsonStructure([
-            'message',
             'data' => [['id', 'created_by', 'letter_number', 'title', 'drive_url']],
+            'current_page',
+            'per_page',
+            'total',
         ]);
     }
 

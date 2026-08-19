@@ -79,3 +79,8 @@
 ## [2026-08-20]
 ### Added
 - Mendefinisikan PRD Fase 4 (Optimasi). Menetapkan standar pagination (15 data per halaman) dan matriks parameter filter/pencarian dinamis untuk seluruh entitas.
+## [2026-08-20]
+### Added
+- TDD Feature Tests yang kompatibel dengan respons JSON Pagination (17 tests passed).
+### Changed
+- Mengimplementasikan `paginate(15)` dan Eloquent `when()` filter pada seluruh *Controller* utama.

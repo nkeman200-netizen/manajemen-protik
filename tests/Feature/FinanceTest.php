@@ -22,6 +22,48 @@ class FinanceTest extends TestCase
         $this->admin->assignRole('admin');
     }
 
+    public function test_can_list_and_filter_finances(): void
+    {
+        // Arrange
+        $event = Event::factory()->create();
+        Finance::create([
+            'user_id'     => $this->admin->id,
+            'event_id'    => $event->id,
+            'type'        => 'income',
+            'amount'      => 500.00,
+            'description' => 'Sponsorship Tech Conference',
+            'date'        => '2026-08-15',
+        ]);
+
+        Finance::create([
+            'user_id'     => $this->admin->id,
+            'event_id'    => $event->id,
+            'type'        => 'expense',
+            'amount'      => 100.00,
+            'description' => 'Beli ATK',
+            'date'        => '2026-08-18',
+        ]);
+
+        // Act & Assert: List all
+        $response = $this->actingAs($this->admin, 'sanctum')
+            ->getJson('/api/finances');
+        $response->assertStatus(200);
+        $response->assertJsonCount(2, 'data');
+        $response->assertJsonStructure([
+            'data' => [['id', 'user_id', 'event_id', 'type', 'amount', 'description', 'date']],
+            'current_page',
+            'per_page',
+            'total',
+        ]);
+
+        // Act & Assert: Filter search
+        $searchResponse = $this->actingAs($this->admin, 'sanctum')
+            ->getJson('/api/finances?search=Tech');
+        $searchResponse->assertStatus(200);
+        $searchResponse->assertJsonCount(1, 'data');
+        $searchResponse->assertJsonFragment(['description' => 'Sponsorship Tech Conference']);
+    }
+
     public function test_admin_can_record_income_without_budget_limit(): void
     {
         // Arrange

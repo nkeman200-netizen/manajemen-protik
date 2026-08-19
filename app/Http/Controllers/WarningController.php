@@ -9,13 +9,14 @@ class WarningController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        $query = Warning::with(['user', 'admin'])->latest('date');
+        $warnings = Warning::with(['user', 'admin'])
+            ->when($request->user()->hasRole('member'), fn ($q) =>
+                $q->where('user_id', $request->user()->id)
+            )
+            ->latest('date')
+            ->paginate(15);
 
-        if ($request->user()->hasRole('member')) {
-            $query->where('user_id', $request->user()->id);
-        }
-
-        return response()->json(['message' => 'Success', 'data' => $query->get()]);
+        return response()->json($warnings);
     }
 
     public function store(Request $request): JsonResponse
