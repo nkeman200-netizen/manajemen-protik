@@ -60,3 +60,7 @@
 ### Added
 - Mengamankan seluruh arsitektur CRUD dengan pengujian otomatis. Menghasilkan 13 test dan 60 assertions yang tervalidasi sukses.
 - Menutup Fase 2 (Core Domain) dengan integrasi penuh antara database, logika controller, dan rute API.
+## [2026-08-20]
+### Added
+- Mendefinisikan matriks hak akses (*Access Control Matrix*) Fase 3 berdasarkan prinsip transparansi Open Government.
+- Menetapkan 3 role utama: `admin` (Full CRUD), `member` (Read-Only, Isolated Warnings), dan `advisor` (Global Read-Only).
