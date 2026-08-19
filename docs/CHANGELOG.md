@@ -89,3 +89,9 @@
 - Mendefinisikan Draf PRD Fase 5 (Analytics & Reporting) untuk fitur Dashboard.
 - Merancang arsitektur API `GET /api/dashboard/statistics` untuk agregasi keuangan dan operasional.
 - Merancang arsitektur API `GET /api/dashboard/upcoming-agenda` untuk fitur Jadwal Agenda Terdekat.
+## [2026-08-20]
+### Added
+- Membuat `DashboardController` untuk agregasi analitik keuangan dan kegiatan organisasi.
+- Implementasi API Endpoint `GET /api/dashboard/statistics` untuk laporan metrik bulanan dan saldo total.
+- Implementasi API Endpoint `GET /api/dashboard/upcoming-agenda` untuk jadwal 5 agenda/rapat terdekat.
+- Menambahkan *Feature Test* (`DashboardTest`) untuk memvalidasi presisi kalkulasi matematis bulanan dan filter tanggal masa depan.

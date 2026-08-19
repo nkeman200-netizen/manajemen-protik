@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\FinanceController;
 use App\Http\Controllers\MeetingAttendanceController;
@@ -13,6 +14,10 @@ Route::get('/user', function (Request $request) {
 })->middleware('auth:sanctum');
 
 Route::middleware('auth:sanctum')->group(function () {
+    // Dashboard endpoints
+    Route::get('/dashboard/statistics', [DashboardController::class, 'statistics']);
+    Route::get('/dashboard/upcoming-agenda', [DashboardController::class, 'upcomingAgenda']);
+
     // Read-only: semua role yang login bisa akses
     Route::get('/meetings', [MeetingController::class, 'index']);
     Route::get('/meeting-attendances', [MeetingAttendanceController::class, 'index']);
