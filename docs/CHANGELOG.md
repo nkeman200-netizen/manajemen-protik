@@ -84,3 +84,8 @@
 - TDD Feature Tests yang kompatibel dengan respons JSON Pagination (17 tests passed).
 ### Changed
 - Mengimplementasikan `paginate(15)` dan Eloquent `when()` filter pada seluruh *Controller* utama.
+## [2026-08-20]
+### Added
+- Mendefinisikan Draf PRD Fase 5 (Analytics & Reporting) untuk fitur Dashboard.
+- Merancang arsitektur API `GET /api/dashboard/statistics` untuk agregasi keuangan dan operasional.
+- Merancang arsitektur API `GET /api/dashboard/upcoming-agenda` untuk fitur Jadwal Agenda Terdekat.
