@@ -114,3 +114,7 @@ Sebagai penutup sesi dan peresmian rilis versi 1.0.0, simpan pencapaianmu ke dal
 ### Changed
 - Mengonfigurasi `config/cors.php` untuk mendukung kredensial SPA (*Single Page Application*) dan interaksi Frontend-Backend yang mulus.
 - Mengimplementasikan *Rate Limiting* (60 request/menit) pada `AppServiceProvider` untuk mengamankan API dari eksploitasi dan serangan *DDoS/Spam*.
+## [2026-08-20]
+### Added
+- Penutupan siklus pengembangan Backend API v1.0.0.
+- Skrip deployment `deploy.sh` dan pembaruan environment variables.
