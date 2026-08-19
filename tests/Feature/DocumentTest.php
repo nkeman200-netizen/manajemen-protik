@@ -5,11 +5,22 @@ use App\Models\Document;
 use App\Models\Event;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class DocumentTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected User $admin;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        Role::firstOrCreate(['name' => 'admin', 'guard_name' => 'web']);
+        $this->admin = User::factory()->create();
+        $this->admin->assignRole('admin');
+    }
 
     public function test_can_list_documents(): void
     {
@@ -18,7 +29,8 @@ class DocumentTest extends TestCase
         Document::factory()->count(3)->create(['created_by' => $user->id]);
 
         // Act
-        $response = $this->getJson('/api/documents');
+        $response = $this->actingAs($this->admin, 'sanctum')
+            ->getJson('/api/documents');
 
         // Assert
         $response->assertStatus(200);
@@ -44,7 +56,8 @@ class DocumentTest extends TestCase
         ];
 
         // Act
-        $response = $this->postJson('/api/documents', $payload);
+        $response = $this->actingAs($this->admin, 'sanctum')
+            ->postJson('/api/documents', $payload);
 
         // Assert
         $response->assertStatus(201);

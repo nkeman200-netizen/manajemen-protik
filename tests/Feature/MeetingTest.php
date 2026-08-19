@@ -2,12 +2,24 @@
 namespace Tests\Feature;
 
 use App\Models\Meeting;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class MeetingTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected User $admin;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        Role::firstOrCreate(['name' => 'admin', 'guard_name' => 'web']);
+        $this->admin = User::factory()->create();
+        $this->admin->assignRole('admin');
+    }
 
     public function test_can_list_meetings(): void
     {
@@ -15,7 +27,8 @@ class MeetingTest extends TestCase
         Meeting::factory()->count(3)->create();
 
         // Act
-        $response = $this->getJson('/api/meetings');
+        $response = $this->actingAs($this->admin, 'sanctum')
+            ->getJson('/api/meetings');
 
         // Assert
         $response->assertStatus(200);
@@ -36,7 +49,8 @@ class MeetingTest extends TestCase
         ];
 
         // Act
-        $response = $this->postJson('/api/meetings', $payload);
+        $response = $this->actingAs($this->admin, 'sanctum')
+            ->postJson('/api/meetings', $payload);
 
         // Assert
         $response->assertStatus(201);

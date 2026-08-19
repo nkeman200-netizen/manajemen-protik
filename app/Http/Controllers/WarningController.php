@@ -7,11 +7,15 @@ use Illuminate\Http\Request;
 
 class WarningController extends Controller
 {
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-        $warnings = Warning::with(['user', 'admin'])->latest('date')->get();
+        $query = Warning::with(['user', 'admin'])->latest('date');
 
-        return response()->json(['message' => 'Success', 'data' => $warnings]);
+        if ($request->user()->hasRole('member')) {
+            $query->where('user_id', $request->user()->id);
+        }
+
+        return response()->json(['message' => 'Success', 'data' => $query->get()]);
     }
 
     public function store(Request $request): JsonResponse

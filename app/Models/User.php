@@ -5,9 +5,10 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable {
-    use HasFactory;
+    use HasFactory, HasRoles;
     protected $fillable = ['name', 'email', 'password', 'status', 'division_id'];
     protected $hidden = ['password', 'remember_token'];
     protected $casts = [

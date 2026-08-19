@@ -5,11 +5,22 @@ use App\Models\Meeting;
 use App\Models\MeetingAttendance;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class MeetingAttendanceTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected User $admin;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        Role::firstOrCreate(['name' => 'admin', 'guard_name' => 'web']);
+        $this->admin = User::factory()->create();
+        $this->admin->assignRole('admin');
+    }
 
     public function test_can_list_attendances(): void
     {
@@ -17,7 +28,8 @@ class MeetingAttendanceTest extends TestCase
         MeetingAttendance::factory()->count(3)->create();
 
         // Act
-        $response = $this->getJson('/api/meeting-attendances');
+        $response = $this->actingAs($this->admin, 'sanctum')
+            ->getJson('/api/meeting-attendances');
 
         // Assert
         $response->assertStatus(200);
@@ -42,7 +54,8 @@ class MeetingAttendanceTest extends TestCase
         ];
 
         // Act
-        $response = $this->postJson('/api/meeting-attendances', $payload);
+        $response = $this->actingAs($this->admin, 'sanctum')
+            ->postJson('/api/meeting-attendances', $payload);
 
         // Assert
         $response->assertStatus(201);

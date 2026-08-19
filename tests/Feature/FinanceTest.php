@@ -5,20 +5,30 @@ use App\Models\Event;
 use App\Models\Finance;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class FinanceTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected User $admin;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        Role::firstOrCreate(['name' => 'admin', 'guard_name' => 'web']);
+        $this->admin = User::factory()->create();
+        $this->admin->assignRole('admin');
+    }
+
     public function test_admin_can_record_income_without_budget_limit(): void
     {
         // Arrange
-        $user = User::factory()->create();
         $event = Event::factory()->create(['budget_approved' => 1000.00]);
 
         $payload = [
-            'user_id'     => $user->id,
+            'user_id'     => $this->admin->id,
             'event_id'    => $event->id,
             'type'        => 'income',
             'amount'      => 999999.99,
@@ -27,12 +37,13 @@ class FinanceTest extends TestCase
         ];
 
         // Act
-        $response = $this->postJson('/api/finances', $payload);
+        $response = $this->actingAs($this->admin, 'sanctum')
+            ->postJson('/api/finances', $payload);
 
         // Assert
         $response->assertStatus(201);
         $this->assertDatabaseHas('finances', [
-            'user_id'  => $user->id,
+            'user_id'  => $this->admin->id,
             'event_id' => $event->id,
             'type'     => 'income',
             'amount'   => 999999.99,
@@ -42,11 +53,10 @@ class FinanceTest extends TestCase
     public function test_expense_is_rejected_when_exceeding_event_budget(): void
     {
         // Arrange
-        $user = User::factory()->create();
         $event = Event::factory()->create(['budget_approved' => 500.00]);
 
         Finance::create([
-            'user_id'     => $user->id,
+            'user_id'     => $this->admin->id,
             'event_id'    => $event->id,
             'type'        => 'expense',
             'amount'      => 400.00,
@@ -55,7 +65,7 @@ class FinanceTest extends TestCase
         ]);
 
         $payload = [
-            'user_id'     => $user->id,
+            'user_id'     => $this->admin->id,
             'event_id'    => $event->id,
             'type'        => 'expense',
             'amount'      => 200.00,
@@ -64,7 +74,8 @@ class FinanceTest extends TestCase
         ];
 
         // Act
-        $response = $this->postJson('/api/finances', $payload);
+        $response = $this->actingAs($this->admin, 'sanctum')
+            ->postJson('/api/finances', $payload);
 
         // Assert
         $response->assertStatus(422);
@@ -77,11 +88,10 @@ class FinanceTest extends TestCase
     public function test_expense_within_budget_is_accepted(): void
     {
         // Arrange
-        $user = User::factory()->create();
         $event = Event::factory()->create(['budget_approved' => 1000.00]);
 
         Finance::create([
-            'user_id'     => $user->id,
+            'user_id'     => $this->admin->id,
             'event_id'    => $event->id,
             'type'        => 'expense',
             'amount'      => 400.00,
@@ -90,7 +100,7 @@ class FinanceTest extends TestCase
         ]);
 
         $payload = [
-            'user_id'     => $user->id,
+            'user_id'     => $this->admin->id,
             'event_id'    => $event->id,
             'type'        => 'expense',
             'amount'      => 600.00,
@@ -99,7 +109,8 @@ class FinanceTest extends TestCase
         ];
 
         // Act
-        $response = $this->postJson('/api/finances', $payload);
+        $response = $this->actingAs($this->admin, 'sanctum')
+            ->postJson('/api/finances', $payload);
 
         // Assert
         $response->assertStatus(201);
