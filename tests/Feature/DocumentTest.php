@@ -37,9 +37,7 @@ class DocumentTest extends TestCase
         $response->assertJsonCount(3, 'data');
         $response->assertJsonStructure([
             'data' => [['id', 'created_by', 'letter_number', 'title', 'drive_url']],
-            'current_page',
-            'per_page',
-            'total',
+            'meta' => ['current_page', 'per_page', 'total'],
         ]);
     }
 

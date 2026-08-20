@@ -51,9 +51,7 @@ class FinanceTest extends TestCase
         $response->assertJsonCount(2, 'data');
         $response->assertJsonStructure([
             'data' => [['id', 'user_id', 'event_id', 'type', 'amount', 'description', 'date']],
-            'current_page',
-            'per_page',
-            'total',
+            'meta' => ['current_page', 'per_page', 'total'],
         ]);
 
         // Act & Assert: Filter search

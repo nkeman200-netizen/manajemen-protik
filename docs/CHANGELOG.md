@@ -125,3 +125,9 @@ Sebagai penutup sesi dan peresmian rilis versi 1.0.0, simpan pencapaianmu ke dal
 - Menetapkan standardisasi *Centralized JSON Logging* terintegrasi.
 ### Deprecated
 - Menolak arsitektur infrastruktur *Master-Slave* dan *Redis Caching* untuk mencegah *over-engineering* dan pemborosan utilitas VPS.
+## [2026-08-20]
+### Changed
+- Refaktor arsitektur Backend dari MVC dasar menuju *Service Pattern*.
+- Mengisolasi logika kalkulasi finansial ke dalam `FinanceService` dan agregasi data ke `DashboardService`.
+- Mengimplementasikan `API Resources` untuk standarisasi transformasi respons JSON.
+- Menerapkan *Centralized Exception Handling* pada `bootstrap/app.php` untuk standarisasi error balasan API dan mencegah kebocoran *stack trace*.

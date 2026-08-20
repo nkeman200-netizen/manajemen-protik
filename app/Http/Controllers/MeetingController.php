@@ -1,13 +1,15 @@
 <?php
 namespace App\Http\Controllers;
 
+use App\Http\Resources\MeetingResource;
 use App\Models\Meeting;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class MeetingController extends Controller
 {
-    public function index(Request $request): JsonResponse
+    public function index(Request $request): AnonymousResourceCollection
     {
         $meetings = Meeting::with('attendances')
             ->when($request->search, fn ($q, $search) =>
@@ -16,7 +18,7 @@ class MeetingController extends Controller
             ->latest('date')
             ->paginate(15);
 
-        return response()->json($meetings);
+        return MeetingResource::collection($meetings);
     }
 
     public function store(Request $request): JsonResponse
@@ -29,6 +31,6 @@ class MeetingController extends Controller
 
         $meeting = Meeting::create($validated);
 
-        return response()->json(['message' => 'Success', 'data' => $meeting], 201);
+        return response()->json(['message' => 'Success', 'data' => new MeetingResource($meeting)], 201);
     }
 }

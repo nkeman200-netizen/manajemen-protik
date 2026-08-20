@@ -1,13 +1,15 @@
 <?php
 namespace App\Http\Controllers;
 
+use App\Http\Resources\DocumentResource;
 use App\Models\Document;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class DocumentController extends Controller
 {
-    public function index(Request $request): JsonResponse
+    public function index(Request $request): AnonymousResourceCollection
     {
         $documents = Document::with(['creator', 'event'])
             ->when($request->search, fn ($q, $search) =>
@@ -22,7 +24,7 @@ class DocumentController extends Controller
             ->latest()
             ->paginate(15);
 
-        return response()->json($documents);
+        return DocumentResource::collection($documents);
     }
 
     public function store(Request $request): JsonResponse
@@ -37,6 +39,6 @@ class DocumentController extends Controller
 
         $document = Document::create($validated);
 
-        return response()->json(['message' => 'Success', 'data' => $document], 201);
+        return response()->json(['message' => 'Success', 'data' => new DocumentResource($document)], 201);
     }
 }

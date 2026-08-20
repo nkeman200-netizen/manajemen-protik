@@ -1,6 +1,7 @@
 <?php
 namespace App\Http\Controllers;
 
+use App\Http\Resources\MeetingAttendanceResource;
 use App\Models\MeetingAttendance;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -11,7 +12,10 @@ class MeetingAttendanceController extends Controller
     {
         $attendances = MeetingAttendance::with(['meeting', 'user'])->latest()->get();
 
-        return response()->json(['message' => 'Success', 'data' => $attendances]);
+        return response()->json([
+            'message' => 'Success',
+            'data'    => MeetingAttendanceResource::collection($attendances),
+        ]);
     }
 
     public function store(Request $request): JsonResponse
@@ -25,6 +29,9 @@ class MeetingAttendanceController extends Controller
 
         $attendance = MeetingAttendance::create($validated);
 
-        return response()->json(['message' => 'Success', 'data' => $attendance], 201);
+        return response()->json([
+            'message' => 'Success',
+            'data'    => new MeetingAttendanceResource($attendance),
+        ], 201);
     }
 }

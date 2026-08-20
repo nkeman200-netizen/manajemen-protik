@@ -1,13 +1,15 @@
 <?php
 namespace App\Http\Controllers;
 
+use App\Http\Resources\WarningResource;
 use App\Models\Warning;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class WarningController extends Controller
 {
-    public function index(Request $request): JsonResponse
+    public function index(Request $request): AnonymousResourceCollection
     {
         $warnings = Warning::with(['user', 'admin'])
             ->when($request->user()->hasRole('member'), fn ($q) =>
@@ -16,7 +18,7 @@ class WarningController extends Controller
             ->latest('date')
             ->paginate(15);
 
-        return response()->json($warnings);
+        return WarningResource::collection($warnings);
     }
 
     public function store(Request $request): JsonResponse
@@ -30,6 +32,6 @@ class WarningController extends Controller
 
         $warning = Warning::create($validated);
 
-        return response()->json(['message' => 'Success', 'data' => $warning], 201);
+        return response()->json(['message' => 'Success', 'data' => new WarningResource($warning)], 201);
     }
 }

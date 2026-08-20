@@ -35,9 +35,7 @@ class WarningTest extends TestCase
         $response->assertJsonCount(3, 'data');
         $response->assertJsonStructure([
             'data' => [['id', 'user_id', 'admin_id', 'reason', 'date']],
-            'current_page',
-            'per_page',
-            'total',
+            'meta' => ['current_page', 'per_page', 'total'],
         ]);
     }
 

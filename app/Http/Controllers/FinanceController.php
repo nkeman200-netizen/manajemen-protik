@@ -1,17 +1,21 @@
 <?php
 namespace App\Http\Controllers;
 
-use App\Models\Event;
-use App\Models\Finance;
+use App\Http\Resources\FinanceResource;
+use App\Services\FinanceService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\ValidationException;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class FinanceController extends Controller
 {
-    public function index(Request $request): JsonResponse
+    public function __construct(
+        private readonly FinanceService $financeService,
+    ) {}
+
+    public function index(Request $request): AnonymousResourceCollection
     {
-        $finances = Finance::with(['user', 'event'])
+        $finances = \App\Models\Finance::with(['user', 'event'])
             ->when($request->search, fn ($q, $search) =>
                 $q->where('description', 'like', "%{$search}%")
             )
@@ -27,7 +31,7 @@ class FinanceController extends Controller
             ->latest('date')
             ->paginate(15);
 
-        return response()->json($finances);
+        return FinanceResource::collection($finances);
     }
 
     public function store(Request $request): JsonResponse
@@ -43,24 +47,10 @@ class FinanceController extends Controller
             'date'           => ['required', 'date'],
         ]);
 
-        if ($validated['type'] === 'expense' && !empty($validated['event_id'])) {
-            $event = Event::findOrFail($validated['event_id']);
+        $finance = $this->financeService->storeFinance($validated);
 
-            $totalExistingExpense = Finance::where('event_id', $event->id)
-                ->where('type', 'expense')
-                ->sum('amount');
-
-            $projectedTotal = $totalExistingExpense + $validated['amount'];
-
-            if ($projectedTotal > $event->budget_approved) {
-                throw ValidationException::withMessages([
-                    'amount' => 'Pengeluaran melebihi anggaran yang disetujui.',
-                ]);
-            }
-        }
-
-        $finance = Finance::create($validated);
-
-        return response()->json($finance, 201);
+        return (new FinanceResource($finance))
+            ->response()
+            ->setStatusCode(201);
     }
 }

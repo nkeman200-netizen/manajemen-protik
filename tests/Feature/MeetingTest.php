@@ -35,9 +35,7 @@ class MeetingTest extends TestCase
         $response->assertJsonCount(3, 'data');
         $response->assertJsonStructure([
             'data' => [['id', 'title', 'date', 'minutes_url']],
-            'current_page',
-            'per_page',
-            'total',
+            'meta' => ['current_page', 'per_page', 'total'],
         ]);
     }
 
