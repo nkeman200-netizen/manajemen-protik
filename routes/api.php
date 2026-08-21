@@ -1,16 +1,20 @@
 <?php
 
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DivisionController;
 use App\Http\Controllers\DocumentController;
+use App\Http\Controllers\EventCommitteeController;
 use App\Http\Controllers\FinanceController;
 use App\Http\Controllers\MeetingAttendanceController;
 use App\Http\Controllers\MeetingController;
+use App\Http\Controllers\RoleController;
+use App\Http\Controllers\UserController;
 use App\Http\Controllers\WarningController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/user', function (Request $request) {
-    return $request->user();
+    return $request->user()->load(['roles', 'division']);
 })->middleware('auth:sanctum');
 
 Route::middleware('auth:sanctum')->group(function () {
@@ -33,4 +37,12 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/warnings', [WarningController::class, 'store']);
         Route::post('/finances', [FinanceController::class, 'store']);
     });
+});
+
+// Master Data & Kepanitiaan: hanya admin global
+Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
+    Route::apiResource('roles', RoleController::class)->only(['index', 'store']);
+    Route::apiResource('divisions', DivisionController::class)->only(['index', 'store', 'update', 'destroy']);
+    Route::apiResource('users', UserController::class)->only(['index', 'update']);
+    Route::apiResource('event-committees', EventCommitteeController::class)->only(['index', 'store', 'destroy']);
 });

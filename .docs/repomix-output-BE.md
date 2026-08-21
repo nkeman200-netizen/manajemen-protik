@@ -34,9 +34,13 @@ The content is organized as follows:
 
 # Directory Structure
 ````
+.docs/
+  CHANGELOG.md
+  MASTER_RULES.md
 app/
   Http/
     Controllers/
+      AuthController.php
       Controller.php
       DashboardController.php
       DocumentController.php
@@ -44,6 +48,12 @@ app/
       MeetingAttendanceController.php
       MeetingController.php
       WarningController.php
+    Resources/
+      DocumentResource.php
+      FinanceResource.php
+      MeetingAttendanceResource.php
+      MeetingResource.php
+      WarningResource.php
   Models/
     Division.php
     Document.php
@@ -55,6 +65,9 @@ app/
     Warning.php
   Providers/
     AppServiceProvider.php
+  Services/
+    DashboardService.php
+    FinanceService.php
 bootstrap/
   cache/
     .gitignore
@@ -100,9 +113,6 @@ database/
     DatabaseSeeder.php
     RolePermissionSeeder.php
   .gitignore
-docs/
-  CHANGELOG.md
-  MASTER_RULES.md
 public/
   .htaccess
   favicon.ico
@@ -169,6 +179,250 @@ vite.config.js
 
 # Files
 
+## File: .docs/CHANGELOG.md
+````markdown
+## [2026-08-20]
+### Added
+- Dokumen Spesifikasi Teknis (PRD) awal untuk web manajemen Protik.
+- Desain ERD untuk 5 tabel utama: users, finances, documents, violations, dan events.
+- Penetapan standar presisi tipe data (Decimal untuk keuangan, Drive URL string untuk arsip dokumen).
+- Pemilihan stack teknologi (Laravel 11, Livewire 3, Spatie Permission).
+
+## [2026-08-20]
+### Added
+- Dokumen Spesifikasi Teknis (PRD) awal untuk web manajemen Protik.
+- Desain ERD untuk 5 tabel utama: users, finances, documents, violations, dan events.
+- Penetapan standar presisi tipe data (Decimal untuk keuangan, Drive URL string untuk arsip dokumen).
+- Pemilihan stack teknologi (Laravel 11, Livewire 3, Spatie Permission).
+## [2026-08-20]
+### Changed
+- Merevisi arsitektur ERD berdasarkan evaluasi alur kerja organisasi.
+- Memisahkan entitas `events` (kegiatan besar) dan `meetings` (rapat rutin).
+- Menambahkan `event_id` (Nullable) pada tabel `documents` untuk manajemen peran pembuatan surat.
+- Menambahkan kolom `receipt_url` pada tabel `finances` untuk integrasi nota via Google Drive.
+- Merubah tabel `violations` menjadi `warnings` untuk simplifikasi kultural.
+## [2026-08-20]
+### Changed
+- Modifikasi tabel `events`: Menghapus `expense_total` (diganti agregasi dinamis) dan menambahkan `budget_approved` untuk limitasi anggaran.
+- Modifikasi tabel `finances`: Menambahkan `event_id` (FK) untuk melacak transaksi per kegiatan.
+- Menambahkan kolom `funding_source` (Enum: IOM, DIPA, KAS, SPONSOR) pada tabel `finances` untuk transparansi sumber dana kegiatan.
+## [2026-08-20]
+### Added
+- Tabel `divisions` untuk manajemen struktur organisasi yang dinamis.
+- Tabel pivot `meeting_attendances` untuk melacak status kehadiran rapat (Hadir, Izin, Sakit, Alpha) dan integrasi bukti WA.
+### Changed
+- Modifikasi tabel `events`: Menambahkan `start_date` dan `end_date` untuk dukungan visualisasi FullCalendar.js.
+- Modifikasi tabel `users`: Menambahkan relasi `division_id`.
+- Modifikasi tabel `meetings`: Mengubah format kolom tanggal menjadi `DateTime`.
+## [2026-08-20]
+### Added
+- Implementasi Skema Migration untuk `divisions`, `events`, dan `finances` dengan tipe data presisi dan index database.
+- Modifikasi tabel `users` untuk menyertakan `division_id` dan `status`.
+- Implementasi Eloquent Models (`User`, `Event`, `Finance`) dengan konfigurasi `$fillable`, tipe *casting*, dan relasi ORM (One-to-Many).
+## [2026-08-20]
+### Added
+- Menyelesaikan seluruh skema Migration database untuk entitas pendukung: `meetings`, `meeting_attendances`, `documents`, dan `warnings`.
+- Mengonfigurasi relasi antar Eloquent Models dengan batasan (constraints) Strict Foreign Key untuk mencegah anomali data.
+## [2026-08-20]
+### Added
+- Mengimplementasikan `FinanceController` dengan logika validasi ketat untuk mencegah pengeluaran melebihi `budget_approved` pada suatu *event*.
+- Membuat `FinanceTest` (TDD) untuk memvalidasi *Happy Path* (Pemasukan) dan *Negative Scenario* (Penolakan limitasi anggaran, Error 422).
+## [2026-08-20]
+### Added
+- Instalasi scaffolding rute API Laravel 11.
+- `FinanceController` dengan logika validasi matematis untuk memblokir pengeluaran yang melebihi batas anggaran (Budget Cap).
+- Modul TDD (Test Driven Development) `FinanceTest` untuk memvalidasi skenario pemasukan dan penolakan anggaran (Error 422).
+### Fixed
+- Menambahkan trait `HasFactory` pada model `User` dan mendefinisikan `EventFactory` untuk keperluan pengujian.
+## [2026-08-20]
+### Added
+- Menyelesaikan seluruh operasi API CRUD (`index`, `store`) untuk entitas `Meeting`, `MeetingAttendance`, `Document`, dan `Warning`.
+- Mendaftarkan rute API terkait ke dalam `routes/api.php`.
+- Melengkapi *Test Suite* (TDD) untuk memvalidasi operasi *read* dan *create* pada seluruh entitas pendukung.
+## [2026-08-20]
+### Added
+- Mengamankan seluruh arsitektur CRUD dengan pengujian otomatis. Menghasilkan 13 test dan 60 assertions yang tervalidasi sukses.
+- Menutup Fase 2 (Core Domain) dengan integrasi penuh antara database, logika controller, dan rute API.
+## [2026-08-20]
+### Added
+- Mendefinisikan matriks hak akses (*Access Control Matrix*) Fase 3 berdasarkan prinsip transparansi Open Government.
+- Menetapkan 3 role utama: `admin` (Full CRUD), `member` (Read-Only, Isolated Warnings), dan `advisor` (Global Read-Only).
+## [2026-08-20]
+### Added
+- Super Prompt konfigurasi Fase 3 (Security & Access Control) untuk agen eksekutor.
+- Menetapkan skema perlindungan rute API (*Role Middleware*) dan isolasi data (*Data Isolation*) untuk surat peringatan.
+## [2026-08-20]
+### Added
+- Menginstal dan mengonfigurasi package `spatie/laravel-permission`.
+- Mengamankan seluruh rute API dengan middleware `auth:sanctum` dan `role:admin` (melindungi endpoint POST, PUT, DELETE).
+- Mengimplementasikan isolasi data (Data Isolation) pada `WarningController` untuk melindungi privasi teguran anggota.
+### Changed
+- Meregistrasi middleware alias untuk Spatie pada `bootstrap/app.php` sesuai standar Laravel 11.
+- Memperbarui seluruh *test suite* Fase 2 untuk menggunakan `actingAs` agar lolos tembok otorisasi Sanctum.
+## [2026-08-20]
+### Added
+- Mendefinisikan PRD Fase 4 (Optimasi). Menetapkan standar pagination (15 data per halaman) dan matriks parameter filter/pencarian dinamis untuk seluruh entitas.
+## [2026-08-20]
+### Added
+- TDD Feature Tests yang kompatibel dengan respons JSON Pagination (17 tests passed).
+### Changed
+- Mengimplementasikan `paginate(15)` dan Eloquent `when()` filter pada seluruh *Controller* utama.
+## [2026-08-20]
+### Added
+- Mendefinisikan Draf PRD Fase 5 (Analytics & Reporting) untuk fitur Dashboard.
+- Merancang arsitektur API `GET /api/dashboard/statistics` untuk agregasi keuangan dan operasional.
+- Merancang arsitektur API `GET /api/dashboard/upcoming-agenda` untuk fitur Jadwal Agenda Terdekat.
+## [2026-08-20]
+### Added
+- Membuat `DashboardController` untuk agregasi analitik keuangan dan kegiatan organisasi.
+- Implementasi API Endpoint `GET /api/dashboard/statistics` untuk laporan metrik bulanan dan saldo total.
+- Implementasi API Endpoint `GET /api/dashboard/upcoming-agenda` untuk jadwal 5 agenda/rapat terdekat.
+- Menambahkan *Feature Test* (`DashboardTest`) untuk memvalidasi presisi kalkulasi matematis bulanan dan filter tanggal masa depan.
+## [2026-08-20]
+### Added
+- Menyelesaikan seluruh siklus Fase 5 dengan 19 tes otomatis (99 assertions) lulus sempurna.
+- Merancang Draf PRD Fase 6 (Gateway & Deployment) mencakup konfigurasi CORS, Rate Limiting, Environment Variables, dan skrip rilis.
+### Penutupan Siklus SDLC Keseluruhan
+
+Setelah agen mengeksekusi instruksi ini, seluruh 6 Fase *Software Development Life Cycle* (SDLC) yang kita mulai dari nol telah resmi berakhir. Organisasi Protik kini memiliki API Backend yang memiliki logika analitik mendalam, dikawal oleh TDD yang ketat, dan dilindungi dengan lapis otorisasi Spatie serta pembatasan *Gateway* jaringan.
+
+Sebagai penutup sesi dan peresmian rilis versi 1.0.0, simpan pencapaianmu ke dalam Git dengan perintah terakhir ini:
+
+**Draft `CHANGELOG.md`:**
+```markdown
+## [2026-08-20]
+### Added
+- Membuat file `deploy.sh` untuk otomatisasi skrip rilis produksi.
+- Menambahkan dokumentasi variabel infrastruktur SPA pada `.env.example`.
+### Changed
+- Mengonfigurasi `config/cors.php` untuk mendukung kredensial SPA (*Single Page Application*) dan interaksi Frontend-Backend yang mulus.
+- Mengimplementasikan *Rate Limiting* (60 request/menit) pada `AppServiceProvider` untuk mengamankan API dari eksploitasi dan serangan *DDoS/Spam*.
+## [2026-08-20]
+### Added
+- Penutupan siklus pengembangan Backend API v1.0.0.
+- Skrip deployment `deploy.sh` dan pembaruan environment variables.
+## [2026-08-20]
+### Added
+- Mendefinisikan Draf PRD Refaktor Enterprise (Post-Release).
+- Merancang pemisahan logika bisnis melalui *Service Pattern* dan *API Resources*.
+- Menetapkan standardisasi *Centralized JSON Logging* terintegrasi.
+### Deprecated
+- Menolak arsitektur infrastruktur *Master-Slave* dan *Redis Caching* untuk mencegah *over-engineering* dan pemborosan utilitas VPS.
+## [2026-08-20]
+### Changed
+- Refaktor arsitektur Backend dari MVC dasar menuju *Service Pattern*.
+- Mengisolasi logika kalkulasi finansial ke dalam `FinanceService` dan agregasi data ke `DashboardService`.
+- Mengimplementasikan `API Resources` untuk standarisasi transformasi respons JSON.
+- Menerapkan *Centralized Exception Handling* pada `bootstrap/app.php` untuk standarisasi error balasan API dan mencegah kebocoran *stack trace*.
+## [2026-08-20]
+### Changed
+- Menyelesaikan refaktor arsitektur Enterprise (Service Pattern, API Resources, Centralized Exception).
+- Memodifikasi `bootstrap/app.php` untuk menangkap eksepsi otorisasi Spatie (`UnauthorizedException`) ke dalam format API JSON standar.
+- Memperbarui 19 *Test Suite* (103 asersi) agar kompatibel dengan struktur paginasi `meta` dari Laravel API Resources.
+## [2026-08-20]
+### Added
+- Membuat `AuthController` untuk menangani logika `login` dan `logout` SPA berbasis *Session*.
+- Mendaftarkan rute otentikasi di `routes/web.php`.
+### Changed
+- Memperbarui `SANCTUM_STATEFUL_DOMAINS` dan `FRONTEND_URL` untuk mendukung port React Vite (5173).
+````
+
+## File: .docs/MASTER_RULES.md
+````markdown
+# DOKUMEN MASTER & PROTOKOL PENGEMBANGAN (STATE MANAGEMENT)
+
+**PERINGATAN UNTUK AI:** 
+Dokumen ini adalah hukum tertinggi untuk sesi ini. Seluruh respons harus mematuhi standar arsitektur, SDLC, dan daftar periksa (checklist) di bawah ini tanpa terkecuali. Mode yang aktif adalah **Mode Profesional Vibe Coder** (Abaikan mode Tutor, berikan Roadmap teknis detail, Super Prompt, dan Full Code yang terstruktur).
+
+## 1. STANDAR ALUR KERJA (SDLC 6 FASE)
+Setiap fitur harus melewati fase ini secara berurutan. Jangan melompat ke fase berikutnya sebelum fase saat ini disetujui.
+*   **Fase 1: System Design & Data Modeling** (Desain ERD, relasi tabel).
+*   **Fase 2: Core Domain Implementation** (Logika CRUD dasar & **TDD / Unit Testing**).
+*   **Fase 3: Security & Access Control** (Autentikasi, otorisasi, pembatasan akses).
+*   **Fase 4: Optimasi & Enhancements** (Filtering, Searching, Pagination).
+*   **Fase 5: Analytics & Reporting** (Agregasi data, pelaporan, dashboard).
+*   **Fase 6: Gateway & Deployment** (CORS, Environment Variables, persiapan CI/CD Pipeline).
+
+## 2. KONTROL MIKRO & ARSITEKTUR (PRD / SUPER PROMPT)
+Sebelum menghasilkan kode, AI wajib merumuskan spesifikasi teknis (PRD) yang mencakup:
+*   **Arsitektur:** Pemisahan lapisan yang tegas (Separation of Concerns: Controller, Logic/Service, Repository/Database).
+*   **Tipe Data Presisi:** Penentuan spesifik (contoh: `UUID`, `Decimal` untuk uang, `BigInt`).
+*   **Library/Package:** Tentukan secara eksplisit package apa yang digunakan dan alasannya.
+*   **Kontrak API:** Tuliskan struktur JSON Request dan Response secara pasti.
+*   **Function Signature:** Tentukan nama fungsi, tipe input, dan return type.
+*   **Error Handling & Logging:** Standarisasi respons eror JSON global dan penggunaan HTTP Status Codes yang presisi. Tangkap pengecualian (exceptions) di tingkat Controller atau Middleware, bukan dibiarkan bocor.
+*   **Database Management:** WAJIB menyertakan kode Migration dan Seeder untuk setiap skema tabel baru.
+*   **Negative Scenarios:** Perencanaan fitur dan TDD wajib mencakup penanganan Edge Cases dan input yang tidak valid.  
+
+## 3. SISTEM GERBANG PERSETUJUAN (GATING SYSTEM)
+*   **ATURAN MUTLAK:** AI DILARANG memberikan *Full Code* atau *Super Prompt* sebelum menyajikan Roadmap/Draf PRD. 
+*   AI wajib berhenti dan menunggu persetujuan (contoh: *"ayo lanjut"*) dari User sebelum mengeksekusi kode.
+
+## 4. KEDISIPLINAN TRACEABILITY
+*   Setiap akhir siklus fitur atau sesi koding, AI WAJIB menagih dan memberikan format pembaruan `CHANGELOG.md` (hanya poin terbaru dengan format tanggal tebal [YYYY-MM-DD]).
+*   AI WAJIB memberikan perintah bash *Conventional Commits* (`git add .` dan `git commit -m "..."`).
+*   Branching Strategy: Tentukan nama cabang Git sebelum memulai kode (contoh: git checkout -b feature/auth-login).
+
+---
+
+## 5. COMPLIANCE CHECKLIST (WAJIB DIJALANKAN AI)
+Setiap kali AI diinstruksikan untuk menulis kode atau menyusun Super Prompt, AI WAJIB memunculkan checklist ini di awal respons dan memastikan semuanya tercentang (✔) sebelum menampilkan kode:
+
+**[ ] Checklist Kepatuhan AI:**
+- [ ] Apakah saya sudah memberikan Roadmap/Draf PRD dan mendapat persetujuan User?
+- [ ] Apakah kode ini mematuhi Separation of Concerns (tidak ada spaghetti code)?
+- [ ] Apakah tipe data, package, dan function signature sudah didefinisikan dengan jelas?
+- [ ] Apakah fitur ini menyertakan pengujian otomatis (TDD/Unit Testing)?
+- [ ] Apakah kode lolos format linting dan standar keamanan dasar?
+- [ ] Apakah saya sudah menyertakan tagihan pembaruan CHANGELOG dan format git commit di akhir respons?
+- [ ] Apakah penanganan eror (Error Handling), HTTP Status, dan skenario negatif sudah ditangani dengan baik?
+
+*(Jika ada satu saja kotak yang tidak bisa dicentang, AI harus berhenti, merevisi kodenya sendiri, atau menanyakan detail yang kurang kepada User).*
+````
+
+## File: app/Http/Controllers/AuthController.php
+````php
+<?php
+
+namespace App\Http\Controllers;
+
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\ValidationException;
+
+class AuthController extends Controller
+{
+    public function login(Request $request): JsonResponse
+    {
+        $credentials = $request->validate([
+            'email'    => ['required', 'email'],
+            'password' => ['required'],
+        ]);
+
+        if (! Auth::attempt($credentials)) {
+            throw ValidationException::withMessages([
+                'email' => 'Kredensial tidak valid.',
+            ]);
+        }
+
+        $request->session()->regenerate();
+
+        return response()->json(['message' => 'Login success']);
+    }
+
+    public function logout(Request $request): JsonResponse
+    {
+        Auth::guard('web')->logout();
+
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
+
+        return response()->json(['message' => 'Logged out']);
+    }
+}
+````
+
 ## File: app/Http/Controllers/Controller.php
 ````php
 <?php
@@ -181,128 +435,145 @@ abstract class Controller
 }
 ````
 
-## File: app/Http/Controllers/DashboardController.php
+## File: app/Http/Resources/DocumentResource.php
 ````php
 <?php
-namespace App\Http\Controllers;
 
-use App\Models\Document;
-use App\Models\Event;
-use App\Models\Finance;
-use App\Models\Meeting;
-use Carbon\Carbon;
-use Illuminate\Http\JsonResponse;
+namespace App\Http\Resources;
 
-class DashboardController extends Controller
+use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\JsonResource;
+
+class DocumentResource extends JsonResource
 {
-    public function statistics(): JsonResponse
+    public function toArray(Request $request): array
     {
-        $now = Carbon::now();
-        $today = $now->toDateString();
-
-        $totalIncome = (float) Finance::where('type', 'income')->sum('amount');
-        $totalExpense = (float) Finance::where('type', 'expense')->sum('amount');
-        $totalBalance = $totalIncome - $totalExpense;
-
-        $incomeThisMonth = (float) Finance::where('type', 'income')
-            ->whereMonth('date', $now->month)
-            ->whereYear('date', $now->year)
-            ->sum('amount');
-
-        $expenseThisMonth = (float) Finance::where('type', 'expense')
-            ->whereMonth('date', $now->month)
-            ->whereYear('date', $now->year)
-            ->sum('amount');
-
-        $activeEventsCount = Event::where('start_date', '<=', $today)
-            ->where(function ($query) use ($today) {
-                $query->where('end_date', '>=', $today)
-                      ->orWhereNull('end_date');
-            })
-            ->count();
-
-        $documentsIssuedThisMonth = Document::whereMonth('created_at', $now->month)
-            ->whereYear('created_at', $now->year)
-            ->count();
-
-        $meetingsThisMonth = Meeting::whereMonth('date', $now->month)
-            ->whereYear('date', $now->year)
-            ->count();
-
-        return response()->json([
-            'message' => 'Success',
-            'data' => [
-                'financial_health' => [
-                    'total_balance' => $totalBalance,
-                    'income_this_month' => $incomeThisMonth,
-                    'expense_this_month' => $expenseThisMonth,
-                ],
-                'event_performance' => [
-                    'active_events_count' => $activeEventsCount,
-                ],
-                'organizational_activity' => [
-                    'documents_issued_this_month' => $documentsIssuedThisMonth,
-                    'meetings_this_month' => $meetingsThisMonth,
-                ],
-            ],
-        ]);
-    }
-
-    public function upcomingAgenda(): JsonResponse
-    {
-        $today = Carbon::now()->startOfDay();
-
-        $upcomingEvents = Event::where('start_date', '>=', $today->toDateString())
-            ->orderBy('start_date', 'asc')
-            ->limit(5)
-            ->get();
-
-        $upcomingMeetings = Meeting::where('date', '>=', $today)
-            ->orderBy('date', 'asc')
-            ->limit(5)
-            ->get();
-
-        return response()->json([
-            'message' => 'Success',
-            'data' => [
-                'upcoming_events' => $upcomingEvents,
-                'upcoming_meetings' => $upcomingMeetings,
-            ],
-        ]);
+        return [
+            'id'            => $this->id,
+            'created_by'    => $this->created_by,
+            'event_id'      => $this->event_id,
+            'letter_number' => $this->letter_number,
+            'title'         => $this->title,
+            'drive_url'     => $this->drive_url,
+            'created_at'    => $this->created_at?->toISOString(),
+            'updated_at'    => $this->updated_at?->toISOString(),
+            'creator'       => $this->whenLoaded('creator'),
+            'event'         => $this->whenLoaded('event'),
+        ];
     }
 }
 ````
 
-## File: app/Http/Controllers/MeetingAttendanceController.php
+## File: app/Http/Resources/FinanceResource.php
 ````php
 <?php
-namespace App\Http\Controllers;
 
-use App\Models\MeetingAttendance;
-use Illuminate\Http\JsonResponse;
+namespace App\Http\Resources;
+
 use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\JsonResource;
 
-class MeetingAttendanceController extends Controller
+class FinanceResource extends JsonResource
 {
-    public function index(): JsonResponse
+    public function toArray(Request $request): array
     {
-        $attendances = MeetingAttendance::with(['meeting', 'user'])->latest()->get();
-
-        return response()->json(['message' => 'Success', 'data' => $attendances]);
+        return [
+            'id'             => $this->id,
+            'user_id'        => $this->user_id,
+            'event_id'       => $this->event_id,
+            'type'           => $this->type,
+            'funding_source' => $this->funding_source,
+            'amount'         => (float) $this->amount,
+            'description'    => $this->description,
+            'receipt_url'    => $this->receipt_url,
+            'date'           => $this->date?->format('Y-m-d'),
+            'created_at'     => $this->created_at?->toISOString(),
+            'updated_at'     => $this->updated_at?->toISOString(),
+            'user'           => $this->whenLoaded('user'),
+            'event'          => $this->whenLoaded('event'),
+        ];
     }
+}
+````
 
-    public function store(Request $request): JsonResponse
+## File: app/Http/Resources/MeetingAttendanceResource.php
+````php
+<?php
+
+namespace App\Http\Resources;
+
+use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\JsonResource;
+
+class MeetingAttendanceResource extends JsonResource
+{
+    public function toArray(Request $request): array
     {
-        $validated = $request->validate([
-            'meeting_id' => ['required', 'exists:meetings,id'],
-            'user_id'    => ['required', 'exists:users,id'],
-            'status'     => ['required', 'in:present,permit,sick,absent'],
-            'proof_url'  => ['nullable', 'string', 'max:255'],
-        ]);
+        return [
+            'id'         => $this->id,
+            'meeting_id' => $this->meeting_id,
+            'user_id'    => $this->user_id,
+            'status'     => $this->status,
+            'proof_url'  => $this->proof_url,
+            'created_at' => $this->created_at?->toISOString(),
+            'updated_at' => $this->updated_at?->toISOString(),
+            'meeting'    => $this->whenLoaded('meeting'),
+            'user'       => $this->whenLoaded('user'),
+        ];
+    }
+}
+````
 
-        $attendance = MeetingAttendance::create($validated);
+## File: app/Http/Resources/MeetingResource.php
+````php
+<?php
 
-        return response()->json(['message' => 'Success', 'data' => $attendance], 201);
+namespace App\Http\Resources;
+
+use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\JsonResource;
+
+class MeetingResource extends JsonResource
+{
+    public function toArray(Request $request): array
+    {
+        return [
+            'id'          => $this->id,
+            'title'       => $this->title,
+            'date'        => $this->date?->format('Y-m-d H:i:s'),
+            'minutes_url' => $this->minutes_url,
+            'created_at'  => $this->created_at?->toISOString(),
+            'updated_at'  => $this->updated_at?->toISOString(),
+            'attendances' => $this->whenLoaded('attendances'),
+        ];
+    }
+}
+````
+
+## File: app/Http/Resources/WarningResource.php
+````php
+<?php
+
+namespace App\Http\Resources;
+
+use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\JsonResource;
+
+class WarningResource extends JsonResource
+{
+    public function toArray(Request $request): array
+    {
+        return [
+            'id'         => $this->id,
+            'user_id'    => $this->user_id,
+            'admin_id'   => $this->admin_id,
+            'reason'     => $this->reason,
+            'date'       => $this->date?->format('Y-m-d'),
+            'created_at' => $this->created_at?->toISOString(),
+            'updated_at' => $this->updated_at?->toISOString(),
+            'user'       => $this->whenLoaded('user'),
+            'admin'      => $this->whenLoaded('admin'),
+        ];
     }
 }
 ````
@@ -317,7 +588,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class Division extends Model
 {
-    //
+    protected $fillable = ['name'];
 }
 ````
 
@@ -518,6 +789,127 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         //
+    }
+}
+````
+
+## File: app/Services/DashboardService.php
+````php
+<?php
+
+namespace App\Services;
+
+use App\Models\Document;
+use App\Models\Event;
+use App\Models\Finance;
+use App\Models\Meeting;
+use Carbon\Carbon;
+
+class DashboardService
+{
+    public function getStatistics(): array
+    {
+        $now   = Carbon::now();
+        $today = $now->toDateString();
+
+        $totalIncome  = (float) Finance::where('type', 'income')->sum('amount');
+        $totalExpense = (float) Finance::where('type', 'expense')->sum('amount');
+        $totalBalance = $totalIncome - $totalExpense;
+
+        $incomeThisMonth = (float) Finance::where('type', 'income')
+            ->whereMonth('date', $now->month)
+            ->whereYear('date', $now->year)
+            ->sum('amount');
+
+        $expenseThisMonth = (float) Finance::where('type', 'expense')
+            ->whereMonth('date', $now->month)
+            ->whereYear('date', $now->year)
+            ->sum('amount');
+
+        $activeEventsCount = Event::where('start_date', '<=', $today)
+            ->where(function ($query) use ($today) {
+                $query->where('end_date', '>=', $today)
+                      ->orWhereNull('end_date');
+            })
+            ->count();
+
+        $documentsIssuedThisMonth = Document::whereMonth('created_at', $now->month)
+            ->whereYear('created_at', $now->year)
+            ->count();
+
+        $meetingsThisMonth = Meeting::whereMonth('date', $now->month)
+            ->whereYear('date', $now->year)
+            ->count();
+
+        return [
+            'financial_health' => [
+                'total_balance'      => $totalBalance,
+                'income_this_month'  => $incomeThisMonth,
+                'expense_this_month' => $expenseThisMonth,
+            ],
+            'event_performance' => [
+                'active_events_count' => $activeEventsCount,
+            ],
+            'organizational_activity' => [
+                'documents_issued_this_month' => $documentsIssuedThisMonth,
+                'meetings_this_month'         => $meetingsThisMonth,
+            ],
+        ];
+    }
+
+    public function getUpcomingAgenda(): array
+    {
+        $today = Carbon::now()->startOfDay();
+
+        $upcomingEvents = Event::where('start_date', '>=', $today->toDateString())
+            ->orderBy('start_date', 'asc')
+            ->limit(5)
+            ->get();
+
+        $upcomingMeetings = Meeting::where('date', '>=', $today)
+            ->orderBy('date', 'asc')
+            ->limit(5)
+            ->get();
+
+        return [
+            'upcoming_events'   => $upcomingEvents,
+            'upcoming_meetings' => $upcomingMeetings,
+        ];
+    }
+}
+````
+
+## File: app/Services/FinanceService.php
+````php
+<?php
+
+namespace App\Services;
+
+use App\Models\Event;
+use App\Models\Finance;
+use Illuminate\Validation\ValidationException;
+
+class FinanceService
+{
+    public function storeFinance(array $data): Finance
+    {
+        if ($data['type'] === 'expense' && !empty($data['event_id'])) {
+            $event = Event::findOrFail($data['event_id']);
+
+            $totalExistingExpense = Finance::where('event_id', $event->id)
+                ->where('type', 'expense')
+                ->sum('amount');
+
+            $projectedTotal = $totalExistingExpense + $data['amount'];
+
+            if ($projectedTotal > $event->budget_approved) {
+                throw ValidationException::withMessages([
+                    'amount' => 'Pengeluaran melebihi anggaran yang disetujui.',
+                ]);
+            }
+        }
+
+        return Finance::create($data);
     }
 }
 ````
@@ -949,11 +1341,11 @@ return [
     |
     */
 
-    'paths' => ['api/*', 'sanctum/csrf-cookie'],
+    'paths' => ['api/*', 'sanctum/csrf-cookie', 'login', 'logout'],
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => ['*'],
+    'allowed_origins' => [env('FRONTEND_URL', 'http://localhost:5173')],
 
     'allowed_origins_patterns' => [],
 
@@ -963,7 +1355,7 @@ return [
 
     'max_age' => 0,
 
-    'supports_credentials' => false,
+    'supports_credentials' => true,
 
 ];
 ````
@@ -2983,25 +3375,127 @@ return new class extends Migration {
 
 namespace Database\Seeders;
 
+use App\Models\Division;
+use App\Models\Document;
+use App\Models\Event;
+use App\Models\Finance;
+use App\Models\Meeting;
+use App\Models\MeetingAttendance;
 use App\Models\User;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
+use App\Models\Warning;
 use Illuminate\Database\Seeder;
 
 class DatabaseSeeder extends Seeder
 {
-    use WithoutModelEvents;
-
-    /**
-     * Seed the application's database.
-     */
     public function run(): void
     {
-        // User::factory(10)->create();
+        // 1. Roles
+        $this->call(RolePermissionSeeder::class);
 
-        User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
+        // 2. Divisi
+        $divisions = collect(['BPH', 'Pendidikan', 'Ristek', 'Humas', 'Ekraf'])
+            ->map(fn (string $name) => Division::create(['name' => $name]));
+
+        $divisionBph    = $divisions->firstWhere('name', 'BPH');
+        $divisionRistek = $divisions->firstWhere('name', 'Ristek');
+
+        // 3. User Statis
+        $admin = User::factory()->create([
+            'name'        => 'Admin Sofyan',
+            'email'       => 'admin@protik.com',
+            'division_id' => $divisionBph->id,
         ]);
+        $admin->assignRole('admin');
+
+        $member = User::factory()->create([
+            'name'        => 'Member User',
+            'email'       => 'member@protik.com',
+            'division_id' => $divisionRistek->id,
+        ]);
+        $member->assignRole('member');
+
+        $advisor = User::factory()->create([
+            'name'        => 'Advisor User',
+            'email'       => 'advisor@protik.com',
+            'division_id' => null,
+        ]);
+        $advisor->assignRole('advisor');
+
+        // 4. 20 User Acak (member)
+        $randomMembers = User::factory()->count(20)->create([
+            'division_id' => fn () => $divisions->random()->id,
+        ]);
+        $randomMembers->each(fn (User $u) => $u->assignRole('member'));
+
+        // Kumpulkan semua member untuk attendance
+        $allMembers = collect([$member])->merge($randomMembers);
+
+        // 5. 5 Event
+        $events = Event::factory()->count(5)->create();
+
+        // 6. Finance per Event (1 income besar, 1 expense kecil)
+        $fundingSources = ['IOM', 'DIPA', 'KAS', 'SPONSOR'];
+
+        $events->each(function (Event $event) use ($admin, $fundingSources) {
+            Finance::create([
+                'user_id'        => $admin->id,
+                'event_id'       => $event->id,
+                'type'           => 'income',
+                'funding_source' => fake()->randomElement($fundingSources),
+                'amount'         => fake()->randomFloat(2, 5_000_000, 50_000_000),
+                'description'    => "Dana masuk untuk {$event->name}",
+                'date'           => $event->start_date?->format('Y-m-d') ?? now()->toDateString(),
+            ]);
+
+            Finance::create([
+                'user_id'        => $admin->id,
+                'event_id'       => $event->id,
+                'type'           => 'expense',
+                'funding_source' => null,
+                'amount'         => fake()->randomFloat(2, 100_000, 2_000_000),
+                'description'    => "Pengeluaran operasional {$event->name}",
+                'date'           => $event->start_date?->copy()->addDays(1)?->format('Y-m-d') ?? now()->toDateString(),
+            ]);
+        });
+
+        // 7. 10 Meeting
+        $meetings = Meeting::factory()->count(10)->create();
+
+        // 8. Attendance setiap Meeting untuk semua member
+        $statuses = ['present', 'permit', 'sick', 'absent'];
+
+        $meetings->each(function (Meeting $meeting) use ($allMembers, $statuses) {
+            $allMembers->each(function (User $member) use ($meeting, $statuses) {
+                MeetingAttendance::create([
+                    'meeting_id' => $meeting->id,
+                    'user_id'    => $member->id,
+                    'status'     => fake()->randomElement($statuses),
+                    'proof_url'  => fake()->optional(0.3)->url(),
+                ]);
+            });
+        });
+
+        // 9. 15 Document
+        Document::factory()->count(15)->create([
+            'created_by' => $admin->id,
+            'event_id'   => fn () => $events->random()->id,
+        ]);
+
+        // 10. 3 Warning
+        $warnedUsers = $allMembers->random(3);
+        $warnedUsers->each(function (User $user) use ($admin) {
+            Warning::create([
+                'user_id'  => $user->id,
+                'admin_id' => $admin->id,
+                'reason'   => fake()->randomElement([
+                    'Tidak hadir 3 kali berturut-turut tanpa keterangan.',
+                    'Melanggar tata tertib organisasi.',
+                    'Tidak menyelesaikan tugas yang diberikan.',
+                    'Terlambat mengumpulkan laporan kegiatan.',
+                ]),
+                'date' => fake()->dateTimeBetween('-1 month', 'now')->format('Y-m-d'),
+            ]);
+        });
     }
 }
 ````
@@ -3030,59 +3524,6 @@ class RolePermissionSeeder extends Seeder
 ## File: database/.gitignore
 ````
 *.sqlite*
-````
-
-## File: docs/MASTER_RULES.md
-````markdown
-# DOKUMEN MASTER & PROTOKOL PENGEMBANGAN (STATE MANAGEMENT)
-
-**PERINGATAN UNTUK AI:** 
-Dokumen ini adalah hukum tertinggi untuk sesi ini. Seluruh respons harus mematuhi standar arsitektur, SDLC, dan daftar periksa (checklist) di bawah ini tanpa terkecuali. Mode yang aktif adalah **Mode Profesional Vibe Coder** (Abaikan mode Tutor, berikan Roadmap teknis detail, Super Prompt, dan Full Code yang terstruktur).
-
-## 1. STANDAR ALUR KERJA (SDLC 6 FASE)
-Setiap fitur harus melewati fase ini secara berurutan. Jangan melompat ke fase berikutnya sebelum fase saat ini disetujui.
-*   **Fase 1: System Design & Data Modeling** (Desain ERD, relasi tabel).
-*   **Fase 2: Core Domain Implementation** (Logika CRUD dasar & **TDD / Unit Testing**).
-*   **Fase 3: Security & Access Control** (Autentikasi, otorisasi, pembatasan akses).
-*   **Fase 4: Optimasi & Enhancements** (Filtering, Searching, Pagination).
-*   **Fase 5: Analytics & Reporting** (Agregasi data, pelaporan, dashboard).
-*   **Fase 6: Gateway & Deployment** (CORS, Environment Variables, persiapan CI/CD Pipeline).
-
-## 2. KONTROL MIKRO & ARSITEKTUR (PRD / SUPER PROMPT)
-Sebelum menghasilkan kode, AI wajib merumuskan spesifikasi teknis (PRD) yang mencakup:
-*   **Arsitektur:** Pemisahan lapisan yang tegas (Separation of Concerns: Controller, Logic/Service, Repository/Database).
-*   **Tipe Data Presisi:** Penentuan spesifik (contoh: `UUID`, `Decimal` untuk uang, `BigInt`).
-*   **Library/Package:** Tentukan secara eksplisit package apa yang digunakan dan alasannya.
-*   **Kontrak API:** Tuliskan struktur JSON Request dan Response secara pasti.
-*   **Function Signature:** Tentukan nama fungsi, tipe input, dan return type.
-*   **Error Handling & Logging:** Standarisasi respons eror JSON global dan penggunaan HTTP Status Codes yang presisi. Tangkap pengecualian (exceptions) di tingkat Controller atau Middleware, bukan dibiarkan bocor.
-*   **Database Management:** WAJIB menyertakan kode Migration dan Seeder untuk setiap skema tabel baru.
-*   **Negative Scenarios:** Perencanaan fitur dan TDD wajib mencakup penanganan Edge Cases dan input yang tidak valid.  
-
-## 3. SISTEM GERBANG PERSETUJUAN (GATING SYSTEM)
-*   **ATURAN MUTLAK:** AI DILARANG memberikan *Full Code* atau *Super Prompt* sebelum menyajikan Roadmap/Draf PRD. 
-*   AI wajib berhenti dan menunggu persetujuan (contoh: *"ayo lanjut"*) dari User sebelum mengeksekusi kode.
-
-## 4. KEDISIPLINAN TRACEABILITY
-*   Setiap akhir siklus fitur atau sesi koding, AI WAJIB menagih dan memberikan format pembaruan `CHANGELOG.md` (hanya poin terbaru dengan format tanggal tebal [YYYY-MM-DD]).
-*   AI WAJIB memberikan perintah bash *Conventional Commits* (`git add .` dan `git commit -m "..."`).
-*   Branching Strategy: Tentukan nama cabang Git sebelum memulai kode (contoh: git checkout -b feature/auth-login).
-
----
-
-## 5. COMPLIANCE CHECKLIST (WAJIB DIJALANKAN AI)
-Setiap kali AI diinstruksikan untuk menulis kode atau menyusun Super Prompt, AI WAJIB memunculkan checklist ini di awal respons dan memastikan semuanya tercentang (✔) sebelum menampilkan kode:
-
-**[ ] Checklist Kepatuhan AI:**
-- [ ] Apakah saya sudah memberikan Roadmap/Draf PRD dan mendapat persetujuan User?
-- [ ] Apakah kode ini mematuhi Separation of Concerns (tidak ada spaghetti code)?
-- [ ] Apakah tipe data, package, dan function signature sudah didefinisikan dengan jelas?
-- [ ] Apakah fitur ini menyertakan pengujian otomatis (TDD/Unit Testing)?
-- [ ] Apakah kode lolos format linting dan standar keamanan dasar?
-- [ ] Apakah saya sudah menyertakan tagihan pembaruan CHANGELOG dan format git commit di akhir respons?
-- [ ] Apakah penanganan eror (Error Handling), HTTP Status, dan skenario negatif sudah ditangani dengan baik?
-
-*(Jika ada satu saja kotak yang tidak bisa dicentang, AI harus berhenti, merevisi kodenya sendiri, atau menanyakan detail yang kurang kepada User).*
 ````
 
 ## File: public/.htaccess
@@ -3405,11 +3846,15 @@ Artisan::command('inspire', function () {
 ````php
 <?php
 
+use App\Http\Controllers\AuthController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
     return view('welcome');
 });
+
+Route::post('/login', [AuthController::class, 'login']);
+Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth:sanctum');
 ````
 
 ## File: storage/app/private/.gitignore
@@ -3879,7 +4324,7 @@ SESSION_DRIVER=database
 SESSION_LIFETIME=120
 SESSION_ENCRYPT=false
 SESSION_PATH=/
-SESSION_DOMAIN=null
+SESSION_DOMAIN=localhost
 
 BROADCAST_CONNECTION=log
 FILESYSTEM_DISK=local
@@ -3911,6 +4356,9 @@ AWS_BUCKET=
 AWS_USE_PATH_STYLE_ENDPOINT=false
 
 VITE_APP_NAME="${APP_NAME}"
+
+SANCTUM_STATEFUL_DOMAINS=localhost:5173,127.0.0.1:5173,localhost:3000,127.0.0.1:3000
+FRONTEND_URL=http://localhost:5173
 ````
 
 ## File: .gitattributes
@@ -4152,156 +4600,75 @@ export default defineConfig({
 });
 ````
 
-## File: app/Http/Controllers/DocumentController.php
+## File: app/Http/Controllers/DashboardController.php
 ````php
 <?php
 namespace App\Http\Controllers;
 
-use App\Models\Document;
+use App\Services\DashboardService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 
-class DocumentController extends Controller
+class DashboardController extends Controller
 {
-    public function index(Request $request): JsonResponse
-    {
-        $documents = Document::with(['creator', 'event'])
-            ->when($request->search, fn ($q, $search) =>
-                $q->where(fn ($q) =>
-                    $q->where('letter_number', 'like', "%{$search}%")
-                      ->orWhere('title', 'like', "%{$search}%")
-                )
-            )
-            ->when($request->event_id, fn ($q, $eventId) =>
-                $q->where('event_id', $eventId)
-            )
-            ->latest()
-            ->paginate(15);
+    public function __construct(
+        private readonly DashboardService $dashboardService,
+    ) {}
 
-        return response()->json($documents);
+    public function statistics(): JsonResponse
+    {
+        return response()->json([
+            'message' => 'Success',
+            'data'    => $this->dashboardService->getStatistics(),
+        ]);
     }
 
-    public function store(Request $request): JsonResponse
+    public function upcomingAgenda(): JsonResponse
     {
-        $validated = $request->validate([
-            'created_by'    => ['required', 'exists:users,id'],
-            'event_id'      => ['nullable', 'exists:events,id'],
-            'letter_number' => ['required', 'string', 'max:255', 'unique:documents,letter_number'],
-            'title'         => ['required', 'string', 'max:255'],
-            'drive_url'     => ['required', 'string', 'max:255'],
+        return response()->json([
+            'message' => 'Success',
+            'data'    => $this->dashboardService->getUpcomingAgenda(),
         ]);
-
-        $document = Document::create($validated);
-
-        return response()->json(['message' => 'Success', 'data' => $document], 201);
     }
 }
 ````
 
-## File: app/Http/Controllers/FinanceController.php
+## File: app/Http/Controllers/MeetingAttendanceController.php
 ````php
 <?php
 namespace App\Http\Controllers;
 
-use App\Models\Event;
-use App\Models\Finance;
+use App\Http\Resources\MeetingAttendanceResource;
+use App\Models\MeetingAttendance;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\ValidationException;
 
-class FinanceController extends Controller
+class MeetingAttendanceController extends Controller
 {
-    public function index(Request $request): JsonResponse
+    public function index(): JsonResponse
     {
-        $finances = Finance::with(['user', 'event'])
-            ->when($request->search, fn ($q, $search) =>
-                $q->where('description', 'like', "%{$search}%")
-            )
-            ->when($request->type, fn ($q, $type) =>
-                $q->where('type', $type)
-            )
-            ->when($request->event_id, fn ($q, $eventId) =>
-                $q->where('event_id', $eventId)
-            )
-            ->when($request->start_date && $request->end_date, fn ($q) =>
-                $q->whereBetween('date', [$request->start_date, $request->end_date])
-            )
-            ->latest('date')
-            ->paginate(15);
+        $attendances = MeetingAttendance::with(['meeting', 'user'])->latest()->get();
 
-        return response()->json($finances);
+        return response()->json([
+            'message' => 'Success',
+            'data'    => MeetingAttendanceResource::collection($attendances),
+        ]);
     }
 
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'user_id'        => ['required', 'exists:users,id'],
-            'event_id'       => ['nullable', 'exists:events,id'],
-            'type'           => ['required', 'in:income,expense'],
-            'funding_source' => ['nullable', 'in:IOM,DIPA,KAS,SPONSOR'],
-            'amount'         => ['required', 'numeric', 'min:1'],
-            'description'    => ['required', 'string'],
-            'receipt_url'    => ['nullable', 'string'],
-            'date'           => ['required', 'date'],
+            'meeting_id' => ['required', 'exists:meetings,id'],
+            'user_id'    => ['required', 'exists:users,id'],
+            'status'     => ['required', 'in:present,permit,sick,absent'],
+            'proof_url'  => ['nullable', 'string', 'max:255'],
         ]);
 
-        if ($validated['type'] === 'expense' && !empty($validated['event_id'])) {
-            $event = Event::findOrFail($validated['event_id']);
+        $attendance = MeetingAttendance::create($validated);
 
-            $totalExistingExpense = Finance::where('event_id', $event->id)
-                ->where('type', 'expense')
-                ->sum('amount');
-
-            $projectedTotal = $totalExistingExpense + $validated['amount'];
-
-            if ($projectedTotal > $event->budget_approved) {
-                throw ValidationException::withMessages([
-                    'amount' => 'Pengeluaran melebihi anggaran yang disetujui.',
-                ]);
-            }
-        }
-
-        $finance = Finance::create($validated);
-
-        return response()->json($finance, 201);
-    }
-}
-````
-
-## File: app/Http/Controllers/MeetingController.php
-````php
-<?php
-namespace App\Http\Controllers;
-
-use App\Models\Meeting;
-use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
-
-class MeetingController extends Controller
-{
-    public function index(Request $request): JsonResponse
-    {
-        $meetings = Meeting::with('attendances')
-            ->when($request->search, fn ($q, $search) =>
-                $q->where('title', 'like', "%{$search}%")
-            )
-            ->latest('date')
-            ->paginate(15);
-
-        return response()->json($meetings);
-    }
-
-    public function store(Request $request): JsonResponse
-    {
-        $validated = $request->validate([
-            'title'       => ['required', 'string', 'max:255'],
-            'date'        => ['required', 'date'],
-            'minutes_url' => ['nullable', 'string', 'max:255'],
-        ]);
-
-        $meeting = Meeting::create($validated);
-
-        return response()->json(['message' => 'Success', 'data' => $meeting], 201);
+        return response()->json([
+            'message' => 'Success',
+            'data'    => new MeetingAttendanceResource($attendance),
+        ], 201);
     }
 }
 ````
@@ -4412,18 +4779,260 @@ class MeetingAttendanceTest extends TestCase
 }
 ````
 
+## File: app/Http/Controllers/DocumentController.php
+````php
+<?php
+namespace App\Http\Controllers;
+
+use App\Http\Resources\DocumentResource;
+use App\Models\Document;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+
+class DocumentController extends Controller
+{
+    public function index(Request $request): AnonymousResourceCollection
+    {
+        $documents = Document::with(['creator', 'event'])
+            ->when($request->search, fn ($q, $search) =>
+                $q->where(fn ($q) =>
+                    $q->where('letter_number', 'like', "%{$search}%")
+                      ->orWhere('title', 'like', "%{$search}%")
+                )
+            )
+            ->when($request->event_id, fn ($q, $eventId) =>
+                $q->where('event_id', $eventId)
+            )
+            ->latest()
+            ->paginate(15);
+
+        return DocumentResource::collection($documents);
+    }
+
+    public function store(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'created_by'    => ['required', 'exists:users,id'],
+            'event_id'      => ['nullable', 'exists:events,id'],
+            'letter_number' => ['required', 'string', 'max:255', 'unique:documents,letter_number'],
+            'title'         => ['required', 'string', 'max:255'],
+            'drive_url'     => ['required', 'string', 'max:255'],
+        ]);
+
+        $document = Document::create($validated);
+
+        return response()->json(['message' => 'Success', 'data' => new DocumentResource($document)], 201);
+    }
+}
+````
+
+## File: app/Http/Controllers/FinanceController.php
+````php
+<?php
+namespace App\Http\Controllers;
+
+use App\Http\Resources\FinanceResource;
+use App\Services\FinanceService;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+
+class FinanceController extends Controller
+{
+    public function __construct(
+        private readonly FinanceService $financeService,
+    ) {}
+
+    public function index(Request $request): AnonymousResourceCollection
+    {
+        $finances = \App\Models\Finance::with(['user', 'event'])
+            ->when($request->search, fn ($q, $search) =>
+                $q->where('description', 'like', "%{$search}%")
+            )
+            ->when($request->type, fn ($q, $type) =>
+                $q->where('type', $type)
+            )
+            ->when($request->event_id, fn ($q, $eventId) =>
+                $q->where('event_id', $eventId)
+            )
+            ->when($request->start_date && $request->end_date, fn ($q) =>
+                $q->whereBetween('date', [$request->start_date, $request->end_date])
+            )
+            ->latest('date')
+            ->paginate(15);
+
+        return FinanceResource::collection($finances);
+    }
+
+    public function store(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'user_id'        => ['required', 'exists:users,id'],
+            'event_id'       => ['nullable', 'exists:events,id'],
+            'type'           => ['required', 'in:income,expense'],
+            'funding_source' => ['nullable', 'in:IOM,DIPA,KAS,SPONSOR'],
+            'amount'         => ['required', 'numeric', 'min:1'],
+            'description'    => ['required', 'string'],
+            'receipt_url'    => ['nullable', 'string'],
+            'date'           => ['required', 'date'],
+        ]);
+
+        $finance = $this->financeService->storeFinance($validated);
+
+        return (new FinanceResource($finance))
+            ->response()
+            ->setStatusCode(201);
+    }
+}
+````
+
+## File: app/Http/Controllers/MeetingController.php
+````php
+<?php
+namespace App\Http\Controllers;
+
+use App\Http\Resources\MeetingResource;
+use App\Models\Meeting;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+
+class MeetingController extends Controller
+{
+    public function index(Request $request): AnonymousResourceCollection
+    {
+        $meetings = Meeting::with('attendances')
+            ->when($request->search, fn ($q, $search) =>
+                $q->where('title', 'like', "%{$search}%")
+            )
+            ->latest('date')
+            ->paginate(15);
+
+        return MeetingResource::collection($meetings);
+    }
+
+    public function store(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'title'       => ['required', 'string', 'max:255'],
+            'date'        => ['required', 'date'],
+            'minutes_url' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $meeting = Meeting::create($validated);
+
+        return response()->json(['message' => 'Success', 'data' => new MeetingResource($meeting)], 201);
+    }
+}
+````
+
+## File: composer.json
+````json
+{
+    "$schema": "https://getcomposer.org/schema.json",
+    "name": "laravel/laravel",
+    "type": "project",
+    "description": "The skeleton application for the Laravel framework.",
+    "keywords": ["laravel", "framework"],
+    "license": "MIT",
+    "require": {
+        "php": "^8.3",
+        "laravel/framework": "^13.17",
+        "laravel/sanctum": "^4.0",
+        "laravel/tinker": "^3.0",
+        "spatie/laravel-permission": "^8.3"
+    },
+    "require-dev": {
+        "fakerphp/faker": "^1.23",
+        "laravel/pail": "^1.2.5",
+        "laravel/pao": "^1.0.6",
+        "laravel/pint": "^1.27",
+        "mockery/mockery": "^1.6",
+        "nunomaduro/collision": "^8.6",
+        "phpunit/phpunit": "^12.5.12"
+    },
+    "autoload": {
+        "psr-4": {
+            "App\\": "app/",
+            "Database\\Factories\\": "database/factories/",
+            "Database\\Seeders\\": "database/seeders/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "setup": [
+            "composer install",
+            "@php -r \"file_exists('.env') || copy('.env.example', '.env');\"",
+            "@php artisan key:generate",
+            "@php artisan migrate --force",
+            "npm install --ignore-scripts",
+            "npm run build"
+        ],
+        "dev": [
+            "Composer\\Config::disableProcessTimeout",
+            "@php artisan dev"
+        ],
+        "test": [
+            "@php artisan config:clear --ansi @no_additional_args",
+            "@php artisan test"
+        ],
+        "post-autoload-dump": [
+            "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",
+            "@php artisan package:discover --ansi"
+        ],
+        "post-update-cmd": [
+            "@php artisan vendor:publish --tag=laravel-assets --ansi --force"
+        ],
+        "post-root-package-install": [
+            "@php -r \"file_exists('.env') || copy('.env.example', '.env');\""
+        ],
+        "post-create-project-cmd": [
+            "@php artisan key:generate --ansi",
+            "@php -r \"file_exists('database/database.sqlite') || touch('database/database.sqlite');\"",
+            "@php artisan migrate --graceful --ansi"
+        ],
+        "pre-package-uninstall": [
+            "Illuminate\\Foundation\\ComposerScripts::prePackageUninstall"
+        ]
+    },
+    "extra": {
+        "laravel": {
+            "dont-discover": []
+        }
+    },
+    "config": {
+        "optimize-autoloader": true,
+        "preferred-install": "dist",
+        "sort-packages": true,
+        "allow-plugins": {
+            "pestphp/pest-plugin": true,
+            "php-http/discovery": true
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
+````
+
 ## File: app/Http/Controllers/WarningController.php
 ````php
 <?php
 namespace App\Http\Controllers;
 
+use App\Http\Resources\WarningResource;
 use App\Models\Warning;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class WarningController extends Controller
 {
-    public function index(Request $request): JsonResponse
+    public function index(Request $request): AnonymousResourceCollection
     {
         $warnings = Warning::with(['user', 'admin'])
             ->when($request->user()->hasRole('member'), fn ($q) =>
@@ -4432,7 +5041,7 @@ class WarningController extends Controller
             ->latest('date')
             ->paginate(15);
 
-        return response()->json($warnings);
+        return WarningResource::collection($warnings);
     }
 
     public function store(Request $request): JsonResponse
@@ -4446,7 +5055,36 @@ class WarningController extends Controller
 
         $warning = Warning::create($validated);
 
-        return response()->json(['message' => 'Success', 'data' => $warning], 201);
+        return response()->json(['message' => 'Success', 'data' => new WarningResource($warning)], 201);
+    }
+}
+````
+
+## File: app/Models/User.php
+````php
+<?php
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Spatie\Permission\Traits\HasRoles;
+
+class User extends Authenticatable {
+    use HasFactory, HasRoles;
+    protected $fillable = ['name', 'email', 'password', 'status', 'division_id'];
+    protected $hidden = ['password', 'remember_token'];
+    protected $casts = [
+        'password' => 'hashed',
+    ];
+
+    public function division(): BelongsTo {
+        return $this->belongsTo(Division::class);
+    }
+
+    public function finances(): HasMany {
+        return $this->hasMany(Finance::class);
     }
 }
 ````
@@ -4459,6 +5097,8 @@ use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
+use Illuminate\Session\TokenMismatchException;
+use Spatie\Permission\Exceptions\UnauthorizedException;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -4472,12 +5112,70 @@ return Application::configure(basePath: dirname(__DIR__))
             'role' => \Spatie\Permission\Middleware\RoleMiddleware::class,
             'permission' => \Spatie\Permission\Middleware\PermissionMiddleware::class,
         ]);
+        $middleware->statefulApi();
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        // Paksa render JSON untuk rute API, login, dan logout
         $exceptions->shouldRenderJsonWhen(
-            fn (Request $request) => $request->is('api/*') || $request->expectsJson(),
+            fn (Request $request) => $request->is('api/*') || $request->is('login') || $request->is('logout') || $request->expectsJson()
         );
+
+        // Tangkap CSRF Mismatch (419)
+        $exceptions->render(function (TokenMismatchException $e, Request $request) {
+            return response()->json([
+                'success' => false,
+                'message' => 'CSRF token mismatch. Sesi telah kedaluwarsa, silakan muat ulang halaman.'
+            ], 419);
+        });
+
+        // Tangkap Spatie Unauthorized (403)
+        $exceptions->render(function (UnauthorizedException $e, Request $request) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Anda tidak memiliki hak akses untuk tindakan ini.'
+            ], 403);
+        });
     })->create();
+````
+
+## File: routes/api.php
+````php
+<?php
+
+use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DocumentController;
+use App\Http\Controllers\FinanceController;
+use App\Http\Controllers\MeetingAttendanceController;
+use App\Http\Controllers\MeetingController;
+use App\Http\Controllers\WarningController;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Route;
+
+Route::get('/user', function (Request $request) {
+    return $request->user();
+})->middleware('auth:sanctum');
+
+Route::middleware('auth:sanctum')->group(function () {
+    // Dashboard endpoints
+    Route::get('/dashboard/statistics', [DashboardController::class, 'statistics']);
+    Route::get('/dashboard/upcoming-agenda', [DashboardController::class, 'upcomingAgenda']);
+
+    // Read-only: semua role yang login bisa akses
+    Route::get('/meetings', [MeetingController::class, 'index']);
+    Route::get('/meeting-attendances', [MeetingAttendanceController::class, 'index']);
+    Route::get('/documents', [DocumentController::class, 'index']);
+    Route::get('/warnings', [WarningController::class, 'index']);
+    Route::get('/finances', [FinanceController::class, 'index'])->withoutMiddleware('role:admin');
+
+    // Write: hanya admin
+    Route::middleware('role:admin')->group(function () {
+        Route::post('/meetings', [MeetingController::class, 'store']);
+        Route::post('/meeting-attendances', [MeetingAttendanceController::class, 'store']);
+        Route::post('/documents', [DocumentController::class, 'store']);
+        Route::post('/warnings', [WarningController::class, 'store']);
+        Route::post('/finances', [FinanceController::class, 'store']);
+    });
+});
 ````
 
 ## File: tests/Feature/DocumentTest.php
@@ -4521,9 +5219,7 @@ class DocumentTest extends TestCase
         $response->assertJsonCount(3, 'data');
         $response->assertJsonStructure([
             'data' => [['id', 'created_by', 'letter_number', 'title', 'drive_url']],
-            'current_page',
-            'per_page',
-            'total',
+            'meta' => ['current_page', 'per_page', 'total'],
         ]);
     }
 
@@ -4611,9 +5307,7 @@ class FinanceTest extends TestCase
         $response->assertJsonCount(2, 'data');
         $response->assertJsonStructure([
             'data' => [['id', 'user_id', 'event_id', 'type', 'amount', 'description', 'date']],
-            'current_page',
-            'per_page',
-            'total',
+            'meta' => ['current_page', 'per_page', 'total'],
         ]);
 
         // Act & Assert: Filter search
@@ -4763,9 +5457,7 @@ class MeetingTest extends TestCase
         $response->assertJsonCount(3, 'data');
         $response->assertJsonStructure([
             'data' => [['id', 'title', 'date', 'minutes_url']],
-            'current_page',
-            'per_page',
-            'total',
+            'meta' => ['current_page', 'per_page', 'total'],
         ]);
     }
 
@@ -4831,9 +5523,7 @@ class WarningTest extends TestCase
         $response->assertJsonCount(3, 'data');
         $response->assertJsonStructure([
             'data' => [['id', 'user_id', 'admin_id', 'reason', 'date']],
-            'current_page',
-            'per_page',
-            'total',
+            'meta' => ['current_page', 'per_page', 'total'],
         ]);
     }
 
@@ -4863,289 +5553,4 @@ class WarningTest extends TestCase
         ]);
     }
 }
-````
-
-## File: composer.json
-````json
-{
-    "$schema": "https://getcomposer.org/schema.json",
-    "name": "laravel/laravel",
-    "type": "project",
-    "description": "The skeleton application for the Laravel framework.",
-    "keywords": ["laravel", "framework"],
-    "license": "MIT",
-    "require": {
-        "php": "^8.3",
-        "laravel/framework": "^13.17",
-        "laravel/sanctum": "^4.0",
-        "laravel/tinker": "^3.0",
-        "spatie/laravel-permission": "^8.3"
-    },
-    "require-dev": {
-        "fakerphp/faker": "^1.23",
-        "laravel/pail": "^1.2.5",
-        "laravel/pao": "^1.0.6",
-        "laravel/pint": "^1.27",
-        "mockery/mockery": "^1.6",
-        "nunomaduro/collision": "^8.6",
-        "phpunit/phpunit": "^12.5.12"
-    },
-    "autoload": {
-        "psr-4": {
-            "App\\": "app/",
-            "Database\\Factories\\": "database/factories/",
-            "Database\\Seeders\\": "database/seeders/"
-        }
-    },
-    "autoload-dev": {
-        "psr-4": {
-            "Tests\\": "tests/"
-        }
-    },
-    "scripts": {
-        "setup": [
-            "composer install",
-            "@php -r \"file_exists('.env') || copy('.env.example', '.env');\"",
-            "@php artisan key:generate",
-            "@php artisan migrate --force",
-            "npm install --ignore-scripts",
-            "npm run build"
-        ],
-        "dev": [
-            "Composer\\Config::disableProcessTimeout",
-            "@php artisan dev"
-        ],
-        "test": [
-            "@php artisan config:clear --ansi @no_additional_args",
-            "@php artisan test"
-        ],
-        "post-autoload-dump": [
-            "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",
-            "@php artisan package:discover --ansi"
-        ],
-        "post-update-cmd": [
-            "@php artisan vendor:publish --tag=laravel-assets --ansi --force"
-        ],
-        "post-root-package-install": [
-            "@php -r \"file_exists('.env') || copy('.env.example', '.env');\""
-        ],
-        "post-create-project-cmd": [
-            "@php artisan key:generate --ansi",
-            "@php -r \"file_exists('database/database.sqlite') || touch('database/database.sqlite');\"",
-            "@php artisan migrate --graceful --ansi"
-        ],
-        "pre-package-uninstall": [
-            "Illuminate\\Foundation\\ComposerScripts::prePackageUninstall"
-        ]
-    },
-    "extra": {
-        "laravel": {
-            "dont-discover": []
-        }
-    },
-    "config": {
-        "optimize-autoloader": true,
-        "preferred-install": "dist",
-        "sort-packages": true,
-        "allow-plugins": {
-            "pestphp/pest-plugin": true,
-            "php-http/discovery": true
-        }
-    },
-    "minimum-stability": "stable",
-    "prefer-stable": true
-}
-````
-
-## File: app/Models/User.php
-````php
-<?php
-namespace App\Models;
-
-use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Foundation\Auth\User as Authenticatable;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasMany;
-use Spatie\Permission\Traits\HasRoles;
-
-class User extends Authenticatable {
-    use HasFactory, HasRoles;
-    protected $fillable = ['name', 'email', 'password', 'status', 'division_id'];
-    protected $hidden = ['password', 'remember_token'];
-    protected $casts = [
-        'password' => 'hashed',
-    ];
-
-    public function division(): BelongsTo {
-        return $this->belongsTo(Division::class);
-    }
-
-    public function finances(): HasMany {
-        return $this->hasMany(Finance::class);
-    }
-}
-````
-
-## File: routes/api.php
-````php
-<?php
-
-use App\Http\Controllers\DashboardController;
-use App\Http\Controllers\DocumentController;
-use App\Http\Controllers\FinanceController;
-use App\Http\Controllers\MeetingAttendanceController;
-use App\Http\Controllers\MeetingController;
-use App\Http\Controllers\WarningController;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Route;
-
-Route::get('/user', function (Request $request) {
-    return $request->user();
-})->middleware('auth:sanctum');
-
-Route::middleware('auth:sanctum')->group(function () {
-    // Dashboard endpoints
-    Route::get('/dashboard/statistics', [DashboardController::class, 'statistics']);
-    Route::get('/dashboard/upcoming-agenda', [DashboardController::class, 'upcomingAgenda']);
-
-    // Read-only: semua role yang login bisa akses
-    Route::get('/meetings', [MeetingController::class, 'index']);
-    Route::get('/meeting-attendances', [MeetingAttendanceController::class, 'index']);
-    Route::get('/documents', [DocumentController::class, 'index']);
-    Route::get('/warnings', [WarningController::class, 'index']);
-    Route::get('/finances', [FinanceController::class, 'index'])->withoutMiddleware('role:admin');
-
-    // Write: hanya admin
-    Route::middleware('role:admin')->group(function () {
-        Route::post('/meetings', [MeetingController::class, 'store']);
-        Route::post('/meeting-attendances', [MeetingAttendanceController::class, 'store']);
-        Route::post('/documents', [DocumentController::class, 'store']);
-        Route::post('/warnings', [WarningController::class, 'store']);
-        Route::post('/finances', [FinanceController::class, 'store']);
-    });
-});
-````
-
-## File: docs/CHANGELOG.md
-````markdown
-## [2026-08-20]
-### Added
-- Dokumen Spesifikasi Teknis (PRD) awal untuk web manajemen Protik.
-- Desain ERD untuk 5 tabel utama: users, finances, documents, violations, dan events.
-- Penetapan standar presisi tipe data (Decimal untuk keuangan, Drive URL string untuk arsip dokumen).
-- Pemilihan stack teknologi (Laravel 11, Livewire 3, Spatie Permission).
-
-## [2026-08-20]
-### Added
-- Dokumen Spesifikasi Teknis (PRD) awal untuk web manajemen Protik.
-- Desain ERD untuk 5 tabel utama: users, finances, documents, violations, dan events.
-- Penetapan standar presisi tipe data (Decimal untuk keuangan, Drive URL string untuk arsip dokumen).
-- Pemilihan stack teknologi (Laravel 11, Livewire 3, Spatie Permission).
-## [2026-08-20]
-### Changed
-- Merevisi arsitektur ERD berdasarkan evaluasi alur kerja organisasi.
-- Memisahkan entitas `events` (kegiatan besar) dan `meetings` (rapat rutin).
-- Menambahkan `event_id` (Nullable) pada tabel `documents` untuk manajemen peran pembuatan surat.
-- Menambahkan kolom `receipt_url` pada tabel `finances` untuk integrasi nota via Google Drive.
-- Merubah tabel `violations` menjadi `warnings` untuk simplifikasi kultural.
-## [2026-08-20]
-### Changed
-- Modifikasi tabel `events`: Menghapus `expense_total` (diganti agregasi dinamis) dan menambahkan `budget_approved` untuk limitasi anggaran.
-- Modifikasi tabel `finances`: Menambahkan `event_id` (FK) untuk melacak transaksi per kegiatan.
-- Menambahkan kolom `funding_source` (Enum: IOM, DIPA, KAS, SPONSOR) pada tabel `finances` untuk transparansi sumber dana kegiatan.
-## [2026-08-20]
-### Added
-- Tabel `divisions` untuk manajemen struktur organisasi yang dinamis.
-- Tabel pivot `meeting_attendances` untuk melacak status kehadiran rapat (Hadir, Izin, Sakit, Alpha) dan integrasi bukti WA.
-### Changed
-- Modifikasi tabel `events`: Menambahkan `start_date` dan `end_date` untuk dukungan visualisasi FullCalendar.js.
-- Modifikasi tabel `users`: Menambahkan relasi `division_id`.
-- Modifikasi tabel `meetings`: Mengubah format kolom tanggal menjadi `DateTime`.
-## [2026-08-20]
-### Added
-- Implementasi Skema Migration untuk `divisions`, `events`, dan `finances` dengan tipe data presisi dan index database.
-- Modifikasi tabel `users` untuk menyertakan `division_id` dan `status`.
-- Implementasi Eloquent Models (`User`, `Event`, `Finance`) dengan konfigurasi `$fillable`, tipe *casting*, dan relasi ORM (One-to-Many).
-## [2026-08-20]
-### Added
-- Menyelesaikan seluruh skema Migration database untuk entitas pendukung: `meetings`, `meeting_attendances`, `documents`, dan `warnings`.
-- Mengonfigurasi relasi antar Eloquent Models dengan batasan (constraints) Strict Foreign Key untuk mencegah anomali data.
-## [2026-08-20]
-### Added
-- Mengimplementasikan `FinanceController` dengan logika validasi ketat untuk mencegah pengeluaran melebihi `budget_approved` pada suatu *event*.
-- Membuat `FinanceTest` (TDD) untuk memvalidasi *Happy Path* (Pemasukan) dan *Negative Scenario* (Penolakan limitasi anggaran, Error 422).
-## [2026-08-20]
-### Added
-- Instalasi scaffolding rute API Laravel 11.
-- `FinanceController` dengan logika validasi matematis untuk memblokir pengeluaran yang melebihi batas anggaran (Budget Cap).
-- Modul TDD (Test Driven Development) `FinanceTest` untuk memvalidasi skenario pemasukan dan penolakan anggaran (Error 422).
-### Fixed
-- Menambahkan trait `HasFactory` pada model `User` dan mendefinisikan `EventFactory` untuk keperluan pengujian.
-## [2026-08-20]
-### Added
-- Menyelesaikan seluruh operasi API CRUD (`index`, `store`) untuk entitas `Meeting`, `MeetingAttendance`, `Document`, dan `Warning`.
-- Mendaftarkan rute API terkait ke dalam `routes/api.php`.
-- Melengkapi *Test Suite* (TDD) untuk memvalidasi operasi *read* dan *create* pada seluruh entitas pendukung.
-## [2026-08-20]
-### Added
-- Mengamankan seluruh arsitektur CRUD dengan pengujian otomatis. Menghasilkan 13 test dan 60 assertions yang tervalidasi sukses.
-- Menutup Fase 2 (Core Domain) dengan integrasi penuh antara database, logika controller, dan rute API.
-## [2026-08-20]
-### Added
-- Mendefinisikan matriks hak akses (*Access Control Matrix*) Fase 3 berdasarkan prinsip transparansi Open Government.
-- Menetapkan 3 role utama: `admin` (Full CRUD), `member` (Read-Only, Isolated Warnings), dan `advisor` (Global Read-Only).
-## [2026-08-20]
-### Added
-- Super Prompt konfigurasi Fase 3 (Security & Access Control) untuk agen eksekutor.
-- Menetapkan skema perlindungan rute API (*Role Middleware*) dan isolasi data (*Data Isolation*) untuk surat peringatan.
-## [2026-08-20]
-### Added
-- Menginstal dan mengonfigurasi package `spatie/laravel-permission`.
-- Mengamankan seluruh rute API dengan middleware `auth:sanctum` dan `role:admin` (melindungi endpoint POST, PUT, DELETE).
-- Mengimplementasikan isolasi data (Data Isolation) pada `WarningController` untuk melindungi privasi teguran anggota.
-### Changed
-- Meregistrasi middleware alias untuk Spatie pada `bootstrap/app.php` sesuai standar Laravel 11.
-- Memperbarui seluruh *test suite* Fase 2 untuk menggunakan `actingAs` agar lolos tembok otorisasi Sanctum.
-## [2026-08-20]
-### Added
-- Mendefinisikan PRD Fase 4 (Optimasi). Menetapkan standar pagination (15 data per halaman) dan matriks parameter filter/pencarian dinamis untuk seluruh entitas.
-## [2026-08-20]
-### Added
-- TDD Feature Tests yang kompatibel dengan respons JSON Pagination (17 tests passed).
-### Changed
-- Mengimplementasikan `paginate(15)` dan Eloquent `when()` filter pada seluruh *Controller* utama.
-## [2026-08-20]
-### Added
-- Mendefinisikan Draf PRD Fase 5 (Analytics & Reporting) untuk fitur Dashboard.
-- Merancang arsitektur API `GET /api/dashboard/statistics` untuk agregasi keuangan dan operasional.
-- Merancang arsitektur API `GET /api/dashboard/upcoming-agenda` untuk fitur Jadwal Agenda Terdekat.
-## [2026-08-20]
-### Added
-- Membuat `DashboardController` untuk agregasi analitik keuangan dan kegiatan organisasi.
-- Implementasi API Endpoint `GET /api/dashboard/statistics` untuk laporan metrik bulanan dan saldo total.
-- Implementasi API Endpoint `GET /api/dashboard/upcoming-agenda` untuk jadwal 5 agenda/rapat terdekat.
-- Menambahkan *Feature Test* (`DashboardTest`) untuk memvalidasi presisi kalkulasi matematis bulanan dan filter tanggal masa depan.
-## [2026-08-20]
-### Added
-- Menyelesaikan seluruh siklus Fase 5 dengan 19 tes otomatis (99 assertions) lulus sempurna.
-- Merancang Draf PRD Fase 6 (Gateway & Deployment) mencakup konfigurasi CORS, Rate Limiting, Environment Variables, dan skrip rilis.
-### Penutupan Siklus SDLC Keseluruhan
-
-Setelah agen mengeksekusi instruksi ini, seluruh 6 Fase *Software Development Life Cycle* (SDLC) yang kita mulai dari nol telah resmi berakhir. Organisasi Protik kini memiliki API Backend yang memiliki logika analitik mendalam, dikawal oleh TDD yang ketat, dan dilindungi dengan lapis otorisasi Spatie serta pembatasan *Gateway* jaringan.
-
-Sebagai penutup sesi dan peresmian rilis versi 1.0.0, simpan pencapaianmu ke dalam Git dengan perintah terakhir ini:
-
-**Draft `CHANGELOG.md`:**
-```markdown
-## [2026-08-20]
-### Added
-- Membuat file `deploy.sh` untuk otomatisasi skrip rilis produksi.
-- Menambahkan dokumentasi variabel infrastruktur SPA pada `.env.example`.
-### Changed
-- Mengonfigurasi `config/cors.php` untuk mendukung kredensial SPA (*Single Page Application*) dan interaksi Frontend-Backend yang mulus.
-- Mengimplementasikan *Rate Limiting* (60 request/menit) pada `AppServiceProvider` untuk mengamankan API dari eksploitasi dan serangan *DDoS/Spam*.
-## [2026-08-20]
-### Added
-- Penutupan siklus pengembangan Backend API v1.0.0.
-- Skrip deployment `deploy.sh` dan pembaruan environment variables.
 ````

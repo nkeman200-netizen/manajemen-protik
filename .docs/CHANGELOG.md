@@ -136,3 +136,16 @@ Sebagai penutup sesi dan peresmian rilis versi 1.0.0, simpan pencapaianmu ke dal
 - Menyelesaikan refaktor arsitektur Enterprise (Service Pattern, API Resources, Centralized Exception).
 - Memodifikasi `bootstrap/app.php` untuk menangkap eksepsi otorisasi Spatie (`UnauthorizedException`) ke dalam format API JSON standar.
 - Memperbarui 19 *Test Suite* (103 asersi) agar kompatibel dengan struktur paginasi `meta` dari Laravel API Resources.
+## [2026-08-20]
+### Added
+- Membuat `AuthController` untuk menangani logika `login` dan `logout` SPA berbasis *Session*.
+- Mendaftarkan rute otentikasi di `routes/web.php`.
+### Changed
+- Memperbarui `SANCTUM_STATEFUL_DOMAINS` dan `FRONTEND_URL` untuk mendukung port React Vite (5173).
+## [2026-08-21]
+### Added
+- Membuat *Migration* dan Model `EventCommittee` untuk mengakomodasi struktur kepanitiaan kegiatan (*Contextual Authorization*).
+- Menambahkan `RoleController`, `DivisionController`, dan `UserController` untuk antarmuka API *Master Data* organisasi.
+- Menambahkan `EventCommitteeController` untuk manajemen penugasan panitia spesifik per *event*.
+### Changed
+- Memperluas `routes/api.php` dengan rute *Master Data* yang dilindungi oleh *middleware* Spatie `role:admin`.
