@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Http\Controllers;
 
 use App\Http\Resources\MeetingResource;
@@ -32,5 +33,30 @@ class MeetingController extends Controller
         $meeting = Meeting::create($validated);
 
         return response()->json(['message' => 'Success', 'data' => new MeetingResource($meeting)], 201);
+    }
+
+    public function update(Request $request, Meeting $meeting): JsonResponse
+    {
+        $validated = $request->validate([
+            'title'       => ['required', 'string', 'max:255'],
+            'date'        => ['required', 'date'],
+            'minutes_url' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $meeting->update($validated);
+
+        return response()->json([
+            'message' => 'Success',
+            'data'    => new MeetingResource($meeting->load('attendances')),
+        ]);
+    }
+
+    public function destroy(Meeting $meeting): JsonResponse
+    {
+        $meeting->delete();
+
+        return response()->json([
+            'message' => 'Success',
+        ]);
     }
 }

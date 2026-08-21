@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Http\Controllers;
 
 use App\Http\Resources\DocumentResource;
@@ -29,6 +30,8 @@ class DocumentController extends Controller
 
     public function store(Request $request): JsonResponse
     {
+        $this->authorizeEventAccess($request->user(), $request->event_id, ['Ketua', 'Sekretaris']);
+
         $validated = $request->validate([
             'created_by'    => ['required', 'exists:users,id'],
             'event_id'      => ['nullable', 'exists:events,id'],
@@ -40,5 +43,35 @@ class DocumentController extends Controller
         $document = Document::create($validated);
 
         return response()->json(['message' => 'Success', 'data' => new DocumentResource($document)], 201);
+    }
+
+    public function update(Request $request, Document $document): JsonResponse
+    {
+        $this->authorizeEventAccess($request->user(), $document->event_id, ['Ketua', 'Sekretaris']);
+
+        $validated = $request->validate([
+            'event_id'      => ['nullable', 'exists:events,id'],
+            'letter_number' => ['required', 'string', 'max:255', 'unique:documents,letter_number,' . $document->id],
+            'title'         => ['required', 'string', 'max:255'],
+            'drive_url'     => ['required', 'string', 'max:255'],
+        ]);
+
+        $document->update($validated);
+
+        return response()->json([
+            'message' => 'Success',
+            'data'    => new DocumentResource($document->load(['creator', 'event'])),
+        ]);
+    }
+
+    public function destroy(Request $request, Document $document): JsonResponse
+    {
+        $this->authorizeEventAccess($request->user(), $document->event_id, ['Ketua', 'Sekretaris']);
+
+        $document->delete();
+
+        return response()->json([
+            'message' => 'Success',
+        ]);
     }
 }

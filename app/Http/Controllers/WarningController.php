@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Http\Controllers;
 
 use App\Http\Resources\WarningResource;
@@ -33,5 +34,31 @@ class WarningController extends Controller
         $warning = Warning::create($validated);
 
         return response()->json(['message' => 'Success', 'data' => new WarningResource($warning)], 201);
+    }
+
+    public function update(Request $request, Warning $warning): JsonResponse
+    {
+        $validated = $request->validate([
+            'user_id'  => ['required', 'exists:users,id'],
+            'admin_id' => ['required', 'exists:users,id'],
+            'reason'   => ['required', 'string'],
+            'date'     => ['required', 'date'],
+        ]);
+
+        $warning->update($validated);
+
+        return response()->json([
+            'message' => 'Success',
+            'data'    => new WarningResource($warning->load(['user', 'admin'])),
+        ]);
+    }
+
+    public function destroy(Warning $warning): JsonResponse
+    {
+        $warning->delete();
+
+        return response()->json([
+            'message' => 'Success',
+        ]);
     }
 }

@@ -149,3 +149,10 @@ Sebagai penutup sesi dan peresmian rilis versi 1.0.0, simpan pencapaianmu ke dal
 - Menambahkan `EventCommitteeController` untuk manajemen penugasan panitia spesifik per *event*.
 ### Changed
 - Memperluas `routes/api.php` dengan rute *Master Data* yang dilindungi oleh *middleware* Spatie `role:admin`.
+## [2026-08-21]
+### Added
+- Membuat `EventController` dengan fungsionalitas operasi *Full CRUD*.
+- Mengimplementasikan `authorizeEventAccess` pada *Base Controller* untuk menangani validasi otorisasi terisolasi berbasis peran kepanitiaan.
+### Changed
+- Mengembangkan *Full CRUD* (`update`, `destroy`) pada entitas `Finance`, `Document`, `Meeting`, dan `Warning`.
+- Mengonfigurasi ulang `routes/api.php` untuk membebaskan rute mutasi Keuangan dan Dokumen dari batasan statis `role:admin` agar dapat dievaluasi secara dinamis oleh *Contextual Authorization*.

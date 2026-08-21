@@ -4,6 +4,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DivisionController;
 use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\EventCommitteeController;
+use App\Http\Controllers\EventController;
 use App\Http\Controllers\FinanceController;
 use App\Http\Controllers\MeetingAttendanceController;
 use App\Http\Controllers\MeetingController;
@@ -22,20 +23,31 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/dashboard/statistics', [DashboardController::class, 'statistics']);
     Route::get('/dashboard/upcoming-agenda', [DashboardController::class, 'upcomingAgenda']);
 
-    // Read-only: semua role yang login bisa akses
+    // Read-only / General endpoints
     Route::get('/meetings', [MeetingController::class, 'index']);
     Route::get('/meeting-attendances', [MeetingAttendanceController::class, 'index']);
-    Route::get('/documents', [DocumentController::class, 'index']);
     Route::get('/warnings', [WarningController::class, 'index']);
-    Route::get('/finances', [FinanceController::class, 'index'])->withoutMiddleware('role:admin');
+    Route::get('/events', [EventController::class, 'index']);
 
-    // Write: hanya admin
+    // Contextual Auth Resources (Finances & Documents)
+    Route::apiResource('finances', FinanceController::class)->except(['create', 'edit']);
+    Route::apiResource('documents', DocumentController::class)->except(['create', 'edit']);
+
+    // Write: Hanya role:admin
     Route::middleware('role:admin')->group(function () {
         Route::post('/meetings', [MeetingController::class, 'store']);
+        Route::put('/meetings/{meeting}', [MeetingController::class, 'update']);
+        Route::delete('/meetings/{meeting}', [MeetingController::class, 'destroy']);
+
         Route::post('/meeting-attendances', [MeetingAttendanceController::class, 'store']);
-        Route::post('/documents', [DocumentController::class, 'store']);
+
         Route::post('/warnings', [WarningController::class, 'store']);
-        Route::post('/finances', [FinanceController::class, 'store']);
+        Route::put('/warnings/{warning}', [WarningController::class, 'update']);
+        Route::delete('/warnings/{warning}', [WarningController::class, 'destroy']);
+
+        Route::post('/events', [EventController::class, 'store']);
+        Route::put('/events/{event}', [EventController::class, 'update']);
+        Route::delete('/events/{event}', [EventController::class, 'destroy']);
     });
 });
 

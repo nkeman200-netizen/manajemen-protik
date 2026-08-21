@@ -1,7 +1,9 @@
 <?php
+
 namespace App\Http\Controllers;
 
 use App\Http\Resources\FinanceResource;
+use App\Models\Finance;
 use App\Services\FinanceService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -15,7 +17,7 @@ class FinanceController extends Controller
 
     public function index(Request $request): AnonymousResourceCollection
     {
-        $finances = \App\Models\Finance::with(['user', 'event'])
+        $finances = Finance::with(['user', 'event'])
             ->when($request->search, fn ($q, $search) =>
                 $q->where('description', 'like', "%{$search}%")
             )
@@ -36,6 +38,8 @@ class FinanceController extends Controller
 
     public function store(Request $request): JsonResponse
     {
+        $this->authorizeEventAccess($request->user(), $request->event_id, ['Ketua', 'Bendahara']);
+
         $validated = $request->validate([
             'user_id'        => ['required', 'exists:users,id'],
             'event_id'       => ['nullable', 'exists:events,id'],
@@ -52,5 +56,38 @@ class FinanceController extends Controller
         return (new FinanceResource($finance))
             ->response()
             ->setStatusCode(201);
+    }
+
+    public function update(Request $request, Finance $finance): JsonResponse
+    {
+        $this->authorizeEventAccess($request->user(), $finance->event_id, ['Ketua', 'Bendahara']);
+
+        $validated = $request->validate([
+            'event_id'       => ['nullable', 'exists:events,id'],
+            'type'           => ['required', 'in:income,expense'],
+            'funding_source' => ['nullable', 'in:IOM,DIPA,KAS,SPONSOR'],
+            'amount'         => ['required', 'numeric', 'min:1'],
+            'description'    => ['required', 'string'],
+            'receipt_url'    => ['nullable', 'string'],
+            'date'           => ['required', 'date'],
+        ]);
+
+        $finance->update($validated);
+
+        return response()->json([
+            'message' => 'Success',
+            'data'    => new FinanceResource($finance->load(['user', 'event'])),
+        ]);
+    }
+
+    public function destroy(Request $request, Finance $finance): JsonResponse
+    {
+        $this->authorizeEventAccess($request->user(), $finance->event_id, ['Ketua', 'Bendahara']);
+
+        $finance->delete();
+
+        return response()->json([
+            'message' => 'Success',
+        ]);
     }
 }
