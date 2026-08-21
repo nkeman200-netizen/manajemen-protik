@@ -10,7 +10,8 @@ class EventController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        $events = Event::when($request->search, fn ($q, $search) =>
+        $events = Event::with('committees.user')
+            ->when($request->search, fn ($q, $search) =>
                 $q->where('name', 'like', "%{$search}%")
             )
             ->latest()
@@ -37,7 +38,7 @@ class EventController extends Controller
 
         return response()->json([
             'message' => 'Success',
-            'data' => $event,
+            'data' => $event->load('committees.user'),
         ], 201);
     }
 
@@ -56,7 +57,7 @@ class EventController extends Controller
 
         return response()->json([
             'message' => 'Success',
-            'data' => $event,
+            'data' => $event->load('committees.user'),
         ]);
     }
 

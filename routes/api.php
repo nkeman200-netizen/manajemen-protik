@@ -24,21 +24,17 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/dashboard/upcoming-agenda', [DashboardController::class, 'upcomingAgenda']);
 
     // Read-only / General endpoints
-    Route::get('/meetings', [MeetingController::class, 'index']);
     Route::get('/meeting-attendances', [MeetingAttendanceController::class, 'index']);
     Route::get('/warnings', [WarningController::class, 'index']);
     Route::get('/events', [EventController::class, 'index']);
 
-    // Contextual Auth Resources (Finances & Documents)
+    // Contextual Auth Resources (Finances, Documents, Meetings)
     Route::apiResource('finances', FinanceController::class)->except(['create', 'edit']);
     Route::apiResource('documents', DocumentController::class)->except(['create', 'edit']);
+    Route::apiResource('meetings', MeetingController::class)->except(['create', 'edit']);
 
     // Write: Hanya role:admin
     Route::middleware('role:admin')->group(function () {
-        Route::post('/meetings', [MeetingController::class, 'store']);
-        Route::put('/meetings/{meeting}', [MeetingController::class, 'update']);
-        Route::delete('/meetings/{meeting}', [MeetingController::class, 'destroy']);
-
         Route::post('/meeting-attendances', [MeetingAttendanceController::class, 'store']);
 
         Route::post('/warnings', [WarningController::class, 'store']);

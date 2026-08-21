@@ -162,3 +162,8 @@ Sebagai penutup sesi dan peresmian rilis versi 1.0.0, simpan pencapaianmu ke dal
 - Mengimplementasikan operasi *Full CRUD* (API Resources) pada `EventController`, `FinanceController`, `DocumentController`, `MeetingController`, dan `WarningController`.
 ### Changed
 - Merefaktor rute `api.php` untuk mendukung operasi *Full CRUD* dan memisahkan rute *Contextual Auth* dari *Middleware Role Admin*.
+## [2026-08-21]
+### Added
+- Membuat *migration* `add_event_id_to_meetings_table` untuk mengelompokkan data notulensi rapat ke dalam ruang kerja *Event* spesifik.
+### Changed
+- Memperbarui `MeetingController` dan `api.php` untuk mengadopsi standar *Contextual Authorization* (Hak Akses BPH Pusat dan BPH Event) pada seluruh metode mutasi (*Full CRUD*).

@@ -23,4 +23,8 @@ class Event extends Model {
     public function finances(): HasMany {
         return $this->hasMany(Finance::class);
     }
+
+    public function committees(): HasMany {
+        return $this->hasMany(EventCommittee::class);
+    }
 }
