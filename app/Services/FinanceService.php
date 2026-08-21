@@ -10,6 +10,8 @@ class FinanceService
 {
     public function storeFinance(array $data): Finance
     {
+        $data['amount'] = ($data['qty'] ?? 1) * ($data['unit_price'] ?? 0);
+
         if ($data['type'] === 'expense' && !empty($data['event_id'])) {
             $event = Event::findOrFail($data['event_id']);
 

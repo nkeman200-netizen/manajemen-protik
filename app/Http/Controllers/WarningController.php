@@ -13,6 +13,13 @@ class WarningController extends Controller
     public function index(Request $request): AnonymousResourceCollection
     {
         $warnings = Warning::with(['user', 'admin'])
+            // INJEKSI LOGIKA PENCARIAN DI SINI
+            ->when($request->search, fn ($q, $search) =>
+                $q->where(fn ($query) =>
+                    $query->where('reason', 'like', "%{$search}%")
+                          ->orWhereHas('user', fn ($u) => $u->where('name', 'like', "%{$search}%"))
+                )
+            )
             ->when($request->user()->hasRole('member'), fn ($q) =>
                 $q->where('user_id', $request->user()->id)
             )

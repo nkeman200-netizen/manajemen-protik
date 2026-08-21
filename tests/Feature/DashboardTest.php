@@ -33,34 +33,42 @@ class DashboardTest extends TestCase
 
         // 1. Finance - Bulan Ini
         Finance::create([
-            'user_id'     => $this->user->id,
-            'type'        => 'income',
-            'amount'      => 1000.00,
-            'description' => 'Income Bulan Ini',
-            'date'        => $now->toDateString(),
+            'user_id'    => $this->user->id,
+            'type'       => 'income',
+            'title'      => 'Income Bulan Ini',
+            'qty'        => 1,
+            'unit_price' => 1000.00,
+            'amount'     => 1000.00,
+            'date'       => $now->toDateString(),
         ]);
         Finance::create([
-            'user_id'     => $this->user->id,
-            'type'        => 'expense',
-            'amount'      => 300.00,
-            'description' => 'Expense Bulan Ini',
-            'date'        => $now->toDateString(),
+            'user_id'    => $this->user->id,
+            'type'       => 'expense',
+            'title'      => 'Expense Bulan Ini',
+            'qty'        => 1,
+            'unit_price' => 300.00,
+            'amount'     => 300.00,
+            'date'       => $now->toDateString(),
         ]);
 
         // Finance - Bulan Lalu
         Finance::create([
-            'user_id'     => $this->user->id,
-            'type'        => 'income',
-            'amount'      => 500.00,
-            'description' => 'Income Bulan Lalu',
-            'date'        => $lastMonth->toDateString(),
+            'user_id'    => $this->user->id,
+            'type'       => 'income',
+            'title'      => 'Income Bulan Lalu',
+            'qty'        => 1,
+            'unit_price' => 500.00,
+            'amount'     => 500.00,
+            'date'       => $lastMonth->toDateString(),
         ]);
         Finance::create([
-            'user_id'     => $this->user->id,
-            'type'        => 'expense',
-            'amount'      => 200.00,
-            'description' => 'Expense Bulan Lalu',
-            'date'        => $lastMonth->toDateString(),
+            'user_id'    => $this->user->id,
+            'type'       => 'expense',
+            'title'      => 'Expense Bulan Lalu',
+            'qty'        => 1,
+            'unit_price' => 200.00,
+            'amount'     => 200.00,
+            'date'       => $lastMonth->toDateString(),
         ]);
 
         // 2. Events - Aktif & Tidak Aktif

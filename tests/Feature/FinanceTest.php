@@ -27,21 +27,29 @@ class FinanceTest extends TestCase
         // Arrange
         $event = Event::factory()->create();
         Finance::create([
-            'user_id'     => $this->admin->id,
-            'event_id'    => $event->id,
-            'type'        => 'income',
-            'amount'      => 500.00,
-            'description' => 'Sponsorship Tech Conference',
-            'date'        => '2026-08-15',
+            'user_id'    => $this->admin->id,
+            'event_id'   => $event->id,
+            'type'       => 'income',
+            'title'      => 'Sponsorship Tech Conference',
+            'qty'        => 1,
+            'unit'       => 'Paket',
+            'unit_price' => 500.00,
+            'amount'     => 500.00,
+            'notes'      => 'Sponsorship utama',
+            'date'       => '2026-08-15',
         ]);
 
         Finance::create([
-            'user_id'     => $this->admin->id,
-            'event_id'    => $event->id,
-            'type'        => 'expense',
-            'amount'      => 100.00,
-            'description' => 'Beli ATK',
-            'date'        => '2026-08-18',
+            'user_id'    => $this->admin->id,
+            'event_id'   => $event->id,
+            'type'       => 'expense',
+            'title'      => 'Beli ATK',
+            'qty'        => 2,
+            'unit'       => 'Rim',
+            'unit_price' => 50.00,
+            'amount'     => 100.00,
+            'notes'      => 'Kertas HVS A4',
+            'date'       => '2026-08-18',
         ]);
 
         // Act & Assert: List all
@@ -50,7 +58,7 @@ class FinanceTest extends TestCase
         $response->assertStatus(200);
         $response->assertJsonCount(2, 'data');
         $response->assertJsonStructure([
-            'data' => [['id', 'user_id', 'event_id', 'type', 'amount', 'description', 'date']],
+            'data' => [['id', 'user_id', 'event_id', 'type', 'title', 'qty', 'unit', 'unit_price', 'amount', 'notes', 'date']],
             'meta' => ['current_page', 'per_page', 'total'],
         ]);
 
@@ -59,7 +67,7 @@ class FinanceTest extends TestCase
             ->getJson('/api/finances?search=Tech');
         $searchResponse->assertStatus(200);
         $searchResponse->assertJsonCount(1, 'data');
-        $searchResponse->assertJsonFragment(['description' => 'Sponsorship Tech Conference']);
+        $searchResponse->assertJsonFragment(['title' => 'Sponsorship Tech Conference']);
     }
 
     public function test_admin_can_record_income_without_budget_limit(): void
@@ -71,8 +79,11 @@ class FinanceTest extends TestCase
             'user_id'     => $this->admin->id,
             'event_id'    => $event->id,
             'type'        => 'income',
-            'amount'      => 999999.99,
-            'description' => 'Dana sponsor masuk',
+            'title'       => 'Dana sponsor masuk',
+            'qty'         => 1,
+            'unit'        => 'Ls',
+            'unit_price'  => 999999.99,
+            'notes'       => 'Dana masuk sponsorship',
             'date'        => '2026-08-20',
         ];
 
@@ -86,6 +97,7 @@ class FinanceTest extends TestCase
             'user_id'  => $this->admin->id,
             'event_id' => $event->id,
             'type'     => 'income',
+            'title'    => 'Dana sponsor masuk',
             'amount'   => 999999.99,
         ]);
     }
@@ -96,21 +108,26 @@ class FinanceTest extends TestCase
         $event = Event::factory()->create(['budget_approved' => 500.00]);
 
         Finance::create([
-            'user_id'     => $this->admin->id,
-            'event_id'    => $event->id,
-            'type'        => 'expense',
-            'amount'      => 400.00,
-            'description' => 'Sewa tempat',
-            'date'        => '2026-08-19',
+            'user_id'    => $this->admin->id,
+            'event_id'   => $event->id,
+            'type'       => 'expense',
+            'title'      => 'Sewa tempat',
+            'qty'        => 1,
+            'unit'       => 'Hari',
+            'unit_price' => 400.00,
+            'amount'     => 400.00,
+            'date'       => '2026-08-19',
         ]);
 
         $payload = [
-            'user_id'     => $this->admin->id,
-            'event_id'    => $event->id,
-            'type'        => 'expense',
-            'amount'      => 200.00,
-            'description' => 'Konsumsi rapat',
-            'date'        => '2026-08-20',
+            'user_id'    => $this->admin->id,
+            'event_id'   => $event->id,
+            'type'       => 'expense',
+            'title'      => 'Konsumsi rapat',
+            'qty'        => 20,
+            'unit'       => 'Kotak',
+            'unit_price' => 10.00,
+            'date'       => '2026-08-20',
         ];
 
         // Act
@@ -121,7 +138,7 @@ class FinanceTest extends TestCase
         $response->assertStatus(422);
         $response->assertJsonValidationErrors('amount');
         $this->assertDatabaseMissing('finances', [
-            'description' => 'Konsumsi rapat',
+            'title' => 'Konsumsi rapat',
         ]);
     }
 
@@ -131,21 +148,26 @@ class FinanceTest extends TestCase
         $event = Event::factory()->create(['budget_approved' => 1000.00]);
 
         Finance::create([
-            'user_id'     => $this->admin->id,
-            'event_id'    => $event->id,
-            'type'        => 'expense',
-            'amount'      => 400.00,
-            'description' => 'Sewa tempat',
-            'date'        => '2026-08-19',
+            'user_id'    => $this->admin->id,
+            'event_id'   => $event->id,
+            'type'       => 'expense',
+            'title'      => 'Sewa tempat',
+            'qty'        => 1,
+            'unit'       => 'Hari',
+            'unit_price' => 400.00,
+            'amount'     => 400.00,
+            'date'       => '2026-08-19',
         ]);
 
         $payload = [
-            'user_id'     => $this->admin->id,
-            'event_id'    => $event->id,
-            'type'        => 'expense',
-            'amount'      => 600.00,
-            'description' => 'Dekorasi',
-            'date'        => '2026-08-20',
+            'user_id'    => $this->admin->id,
+            'event_id'   => $event->id,
+            'type'       => 'expense',
+            'title'      => 'Dekorasi',
+            'qty'        => 3,
+            'unit'       => 'Paket',
+            'unit_price' => 200.00,
+            'date'       => '2026-08-20',
         ];
 
         // Act
@@ -155,8 +177,8 @@ class FinanceTest extends TestCase
         // Assert
         $response->assertStatus(201);
         $this->assertDatabaseHas('finances', [
-            'description' => 'Dekorasi',
-            'amount'      => 600.00,
+            'title'  => 'Dekorasi',
+            'amount' => 600.00,
         ]);
     }
 }

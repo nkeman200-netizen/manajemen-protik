@@ -64,23 +64,33 @@ class DatabaseSeeder extends Seeder
         $fundingSources = ['IOM', 'DIPA', 'KAS', 'SPONSOR'];
 
         $events->each(function (Event $event) use ($admin, $fundingSources) {
+            $incomeAmount = fake()->randomFloat(2, 5_000_000, 50_000_000);
             Finance::create([
                 'user_id'        => $admin->id,
                 'event_id'       => $event->id,
                 'type'           => 'income',
                 'funding_source' => fake()->randomElement($fundingSources),
-                'amount'         => fake()->randomFloat(2, 5_000_000, 50_000_000),
-                'description'    => "Dana masuk untuk {$event->name}",
+                'title'          => "Dana masuk untuk {$event->name}",
+                'qty'            => 1,
+                'unit'           => 'Ls',
+                'unit_price'     => $incomeAmount,
+                'amount'         => $incomeAmount,
+                'notes'          => 'Penerimaan dana kas',
                 'date'           => $event->start_date?->format('Y-m-d') ?? now()->toDateString(),
             ]);
 
+            $expenseAmount = fake()->randomFloat(2, 100_000, 2_000_000);
             Finance::create([
                 'user_id'        => $admin->id,
                 'event_id'       => $event->id,
                 'type'           => 'expense',
                 'funding_source' => null,
-                'amount'         => fake()->randomFloat(2, 100_000, 2_000_000),
-                'description'    => "Pengeluaran operasional {$event->name}",
+                'title'          => "Pengeluaran operasional {$event->name}",
+                'qty'            => 1,
+                'unit'           => 'Ls',
+                'unit_price'     => $expenseAmount,
+                'amount'         => $expenseAmount,
+                'notes'          => 'Pengeluaran operasional kegiatan',
                 'date'           => $event->start_date?->copy()->addDays(1)?->format('Y-m-d') ?? now()->toDateString(),
             ]);
         });

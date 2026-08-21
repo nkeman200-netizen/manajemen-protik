@@ -10,12 +10,15 @@ class Finance extends Model {
 
     protected $fillable = [
         'user_id', 'event_id', 'type', 'funding_source', 
-        'amount', 'description', 'receipt_url', 'date'
+        'title', 'qty', 'unit', 'unit_price', 'amount', 
+        'notes', 'receipt_url', 'date'
     ];
 
     protected $casts = [
-        'amount' => 'decimal:2',
-        'date' => 'date',
+        'qty'        => 'decimal:2',
+        'unit_price' => 'decimal:2',
+        'amount'     => 'decimal:2',
+        'date'       => 'date',
     ];
 
     public function user(): BelongsTo {

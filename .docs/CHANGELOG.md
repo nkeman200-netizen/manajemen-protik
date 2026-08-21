@@ -167,3 +167,7 @@ Sebagai penutup sesi dan peresmian rilis versi 1.0.0, simpan pencapaianmu ke dal
 - Membuat *migration* `add_event_id_to_meetings_table` untuk mengelompokkan data notulensi rapat ke dalam ruang kerja *Event* spesifik.
 ### Changed
 - Memperbarui `MeetingController` dan `api.php` untuk mengadopsi standar *Contextual Authorization* (Hak Akses BPH Pusat dan BPH Event) pada seluruh metode mutasi (*Full CRUD*).
+## [2026-08-22]
+### Changed
+- Mengubah skema database `finances` menjadi standar Laporan Pertanggungjawaban (LPJ) dengan penambahan indeksasi matematis (*Quantity*, *Unit*, *Unit Price*).
+- Memisahkan logika kalkulasi total agregat secara absolut ke dalam `FinanceService` guna mencegah manipulasi *payload*.

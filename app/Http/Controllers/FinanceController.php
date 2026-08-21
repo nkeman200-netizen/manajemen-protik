@@ -19,7 +19,10 @@ class FinanceController extends Controller
     {
         $finances = Finance::with(['user', 'event'])
             ->when($request->search, fn ($q, $search) =>
-                $q->where('description', 'like', "%{$search}%")
+                $q->where(fn ($query) =>
+                    $query->where('title', 'like', "%{$search}%")
+                          ->orWhere('notes', 'like', "%{$search}%")
+                )
             )
             ->when($request->type, fn ($q, $type) =>
                 $q->where('type', $type)
@@ -44,9 +47,12 @@ class FinanceController extends Controller
             'user_id'        => ['required', 'exists:users,id'],
             'event_id'       => ['nullable', 'exists:events,id'],
             'type'           => ['required', 'in:income,expense'],
-            'funding_source' => ['nullable', 'in:IOM,DIPA,KAS,SPONSOR'],
-            'amount'         => ['required', 'numeric', 'min:1'],
-            'description'    => ['required', 'string'],
+            'funding_source' => ['nullable', 'string'],
+            'title'          => ['required', 'string', 'max:255'],
+            'qty'            => ['required', 'numeric', 'min:0.01'],
+            'unit'           => ['nullable', 'string', 'max:50'],
+            'unit_price'     => ['required', 'numeric', 'min:0'],
+            'notes'          => ['nullable', 'string'],
             'receipt_url'    => ['nullable', 'string'],
             'date'           => ['required', 'date'],
         ]);
@@ -65,12 +71,17 @@ class FinanceController extends Controller
         $validated = $request->validate([
             'event_id'       => ['nullable', 'exists:events,id'],
             'type'           => ['required', 'in:income,expense'],
-            'funding_source' => ['nullable', 'in:IOM,DIPA,KAS,SPONSOR'],
-            'amount'         => ['required', 'numeric', 'min:1'],
-            'description'    => ['required', 'string'],
+            'funding_source' => ['nullable', 'string'],
+            'title'          => ['required', 'string', 'max:255'],
+            'qty'            => ['required', 'numeric', 'min:0.01'],
+            'unit'           => ['nullable', 'string', 'max:50'],
+            'unit_price'     => ['required', 'numeric', 'min:0'],
+            'notes'          => ['nullable', 'string'],
             'receipt_url'    => ['nullable', 'string'],
             'date'           => ['required', 'date'],
         ]);
+
+        $validated['amount'] = ($validated['qty'] ?? 1) * ($validated['unit_price'] ?? 0);
 
         $finance->update($validated);
 
