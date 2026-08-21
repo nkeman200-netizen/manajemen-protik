@@ -156,3 +156,9 @@ Sebagai penutup sesi dan peresmian rilis versi 1.0.0, simpan pencapaianmu ke dal
 ### Changed
 - Mengembangkan *Full CRUD* (`update`, `destroy`) pada entitas `Finance`, `Document`, `Meeting`, dan `Warning`.
 - Mengonfigurasi ulang `routes/api.php` untuk membebaskan rute mutasi Keuangan dan Dokumen dari batasan statis `role:admin` agar dapat dievaluasi secara dinamis oleh *Contextual Authorization*.
+## [2026-08-21]
+### Added
+- Mengimplementasikan `authorizeEventAccess` pada *Base Controller* untuk mengawal *Contextual Authorization*.
+- Mengimplementasikan operasi *Full CRUD* (API Resources) pada `EventController`, `FinanceController`, `DocumentController`, `MeetingController`, dan `WarningController`.
+### Changed
+- Merefaktor rute `api.php` untuk mendukung operasi *Full CRUD* dan memisahkan rute *Contextual Auth* dari *Middleware Role Admin*.
