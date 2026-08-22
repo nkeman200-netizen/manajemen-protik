@@ -9,9 +9,9 @@ class Finance extends Model {
     use HasFactory;
 
     protected $fillable = [
-        'user_id', 'event_id', 'type', 'funding_source', 
-        'title', 'qty', 'unit', 'unit_price', 'amount', 
-        'notes', 'receipt_url', 'date'
+        'user_id', 'event_id', 'type', 'category', 'funding_source', 
+        'title', 'description', 'qty', 'unit', 'unit_price', 'amount', 
+        'pic', 'payment_method', 'notes', 'receipt_url', 'date'
     ];
 
     protected $casts = [

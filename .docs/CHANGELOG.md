@@ -193,3 +193,14 @@ Sebagai penutup sesi dan peresmian rilis versi 1.0.0, simpan pencapaianmu ke dal
 ### Removed
 - Melakukan *Strict Database Normalization* dengan mengeksekusi *drop column* `drive_url` pada tabel `documents` untuk mengeliminasi redundansi arsitektur.
 - Membersihkan komponen `DocumentModal.jsx` dan *Kebab Menu Actions* dari *state* dan *payload* `drive_url` lama, menggantikannya secara eksklusif dengan `letter_link` dan `scan_link`.
+## [2026-08-23]
+### Added
+- Mengekspansi tabel `finances` dengan standar atribut *Enterprise Accounting* (`category`, `qty`, `unit_price`, `pic`, `payment_method`).
+- Mengimplementasikan `FinanceController@sync` dengan strategi arsitektur *Transactional Wipe & Reload* (`DB::transaction`) untuk memastikan *Single Source of Truth* (SSOT) dari *sheet* Kas Umum tanpa kompromi integritas.
+### Changed
+- Merombak antarmuka `Finance.jsx` dengan mengganti metode *Upload* manual menjadi tombol eksekusi *Cloud Sync*, dan memperbarui visualisasi *badge* kolom untuk mencakup *Category* dan *PIC*.
+```markdown
+## [2026-08-23]
+### Fixed
+- Menambal *bug array_search* yang gagal mengenali struktur *header* CSV akibat anomali *Hidden Whitespace* dengan menyuntikkan algoritma sanitasi `trim()` iteratif.
+- Mengimplementasikan *Regex Currency Formatter* pada *parser* harga untuk memitigasi kegagalan konversi format *String* Rupiah bawaan Google Sheets (`RpX.XXX,00`) menjadi presisi *Float Desimal* yang valid.

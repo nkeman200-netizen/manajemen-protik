@@ -45,6 +45,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // (Bisa di-POST/PUT oleh Admin DAN anggota BPH Event via Authorization Policy)
     Route::post('/meeting-attendances', [MeetingAttendanceController::class, 'store']);
     Route::post('/meeting-attendances/bulk', [MeetingAttendanceController::class, 'bulkStore']);
+    Route::post('/finances/sync', [FinanceController::class, 'sync']);
     Route::apiResource('finances', FinanceController::class)->except(['create', 'edit', 'index']);
     Route::post('/documents/sync', [DocumentController::class, 'sync']);
     Route::apiResource('documents', DocumentController::class)->except(['create', 'edit', 'index']);
