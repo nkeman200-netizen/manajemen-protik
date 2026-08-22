@@ -15,9 +15,9 @@ class FinanceController extends Controller
         private readonly FinanceService $financeService,
     ) {}
 
-    public function index(Request $request): AnonymousResourceCollection
+    public function index(Request $request)
     {
-        $finances = Finance::with(['user', 'event'])
+        $query = Finance::with(['user', 'event'])
             ->when($request->search, fn ($q, $search) =>
                 $q->where(fn ($query) =>
                     $query->where('title', 'like', "%{$search}%")
@@ -33,9 +33,18 @@ class FinanceController extends Controller
             ->when($request->start_date && $request->end_date, fn ($q) =>
                 $q->whereBetween('date', [$request->start_date, $request->end_date])
             )
-            ->latest('date')
-            ->paginate(15);
+            ->latest('date');
 
+        // BYPASS OPTIMASI EXPORT
+        if ($request->boolean('export')) {
+            $finances = $query->get();
+            return response()->json([
+                'message' => 'Export payload ready',
+                'data' => FinanceResource::collection($finances)
+            ]);
+        }
+
+        $finances = $query->paginate(15);
         return FinanceResource::collection($finances);
     }
 

@@ -9,8 +9,14 @@ use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable {
     use HasFactory, HasRoles;
-    protected $fillable = ['name', 'email', 'password', 'status', 'division_id'];
+
+    protected $fillable = [
+        'name', 'email', 'password', 'status', 'division_id',
+        'nim', 'phone', 'prodi', 'angkatan', 'address'
+    ];
+
     protected $hidden = ['password', 'remember_token'];
+
     protected $casts = [
         'password' => 'hashed',
     ];

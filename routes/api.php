@@ -8,17 +8,23 @@ use App\Http\Controllers\EventController;
 use App\Http\Controllers\FinanceController;
 use App\Http\Controllers\MeetingAttendanceController;
 use App\Http\Controllers\MeetingController;
+use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\WarningController;
+use App\Http\Resources\UserResource;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/user', function (Request $request) {
-    return $request->user()->load(['roles', 'division']);
+    return new UserResource($request->user()->load(['roles', 'division']));
 })->middleware('auth:sanctum');
 
 Route::middleware('auth:sanctum')->group(function () {
+    // Profile endpoints
+    Route::put('/user/profile', [ProfileController::class, 'updateProfile']);
+    Route::put('/user/password', [ProfileController::class, 'updatePassword']);
+
     // Dashboard endpoints
     Route::get('/dashboard/statistics', [DashboardController::class, 'statistics']);
     Route::get('/dashboard/upcoming-agenda', [DashboardController::class, 'upcomingAgenda']);

@@ -171,3 +171,8 @@ Sebagai penutup sesi dan peresmian rilis versi 1.0.0, simpan pencapaianmu ke dal
 ### Changed
 - Mengubah skema database `finances` menjadi standar Laporan Pertanggungjawaban (LPJ) dengan penambahan indeksasi matematis (*Quantity*, *Unit*, *Unit Price*).
 - Memisahkan logika kalkulasi total agregat secara absolut ke dalam `FinanceService` guna mencegah manipulasi *payload*.
+## [2026-08-22]
+### Added
+- Membuat *migration* `add_personal_details_to_users_table` untuk mengekspansi entitas pengguna dengan kolom PII administratif (`nim`, `phone`, `prodi`, `angkatan`, `address`).
+- Mengimplementasikan `UserResource` untuk menstandarisasi *payload* data *User* yang dikirim ke *Frontend*.
+- Membuat `ProfileController` untuk melayani fungsi mutasi data diri dan pergantian kata sandi yang dilengkapi dengan *Current Password Verification*.
