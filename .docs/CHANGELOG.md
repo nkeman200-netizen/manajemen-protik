@@ -204,3 +204,9 @@ Sebagai penutup sesi dan peresmian rilis versi 1.0.0, simpan pencapaianmu ke dal
 ### Fixed
 - Menambal *bug array_search* yang gagal mengenali struktur *header* CSV akibat anomali *Hidden Whitespace* dengan menyuntikkan algoritma sanitasi `trim()` iteratif.
 - Mengimplementasikan *Regex Currency Formatter* pada *parser* harga untuk memitigasi kegagalan konversi format *String* Rupiah bawaan Google Sheets (`RpX.XXX,00`) menjadi presisi *Float Desimal* yang valid.
+## [2026-08-23]
+### Fixed
+- Menambal celah peringatan *False Positive* pada pelaporan diagnostik mesin *Cloud Sync* `MonthlyDueController` dengan mengimplementasikan filter `is_numeric`. Filter ini mencegah baris rekapitulasi data Excel (seperti "Total Keseluruhan") terproses sebagai target mutasi *database*.
+## [2026-08-23]
+### Added
+- Melakukan mutasi arsitektural pada tabel `events` dengan menambahkan kolom *metadata* `document_sync_url` dan `finance_sync_url`. Modifikasi ini menginisiasi transisi sistem dari *Centralized BPH Sync* menjadi ekosistem *Distributed Cloud Sync* berskala *Multi-Event*.

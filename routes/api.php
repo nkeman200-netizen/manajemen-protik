@@ -11,6 +11,7 @@ use App\Http\Controllers\EventController;
 use App\Http\Controllers\FinanceController;
 use App\Http\Controllers\MeetingAttendanceController;
 use App\Http\Controllers\MeetingController;
+use App\Http\Controllers\MonthlyDueController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\UserController;
@@ -57,6 +58,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware('role:admin')->group(function () {
         // Audit Trails
         Route::get('/audit-trails', [AuditTrailController::class, 'index']);
+
+        // Kas Pengurus (Monthly Dues)
+        Route::get('/monthly-dues', [MonthlyDueController::class, 'index']);
+        Route::post('/monthly-dues/sync', [MonthlyDueController::class, 'sync']);
 
         // Master Data
         Route::put('/users/{user}', [UserController::class, 'update']);

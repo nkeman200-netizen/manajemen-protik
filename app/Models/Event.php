@@ -10,14 +10,15 @@ class Event extends Model {
 
     protected $fillable = [
         'name', 'description', 'budget_approved', 
-        'drive_folder_url', 'start_date', 'end_date'
+        'drive_folder_url', 'start_date', 'end_date',
+        'document_sync_url', 'finance_sync_url',
     ];
 
     // Konversi presisi data otomatis
     protected $casts = [
         'budget_approved' => 'decimal:2',
-        'start_date' => 'date',
-        'end_date' => 'date',
+        'start_date'      => 'date',
+        'end_date'        => 'date',
     ];
 
     public function finances(): HasMany {
