@@ -46,6 +46,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/meeting-attendances', [MeetingAttendanceController::class, 'store']);
     Route::post('/meeting-attendances/bulk', [MeetingAttendanceController::class, 'bulkStore']);
     Route::apiResource('finances', FinanceController::class)->except(['create', 'edit', 'index']);
+    Route::post('/documents/sync', [DocumentController::class, 'sync']);
     Route::apiResource('documents', DocumentController::class)->except(['create', 'edit', 'index']);
     Route::apiResource('meetings', MeetingController::class)->except(['create', 'edit', 'index']);
     Route::apiResource('events', EventController::class)->except(['create', 'edit', 'index']);

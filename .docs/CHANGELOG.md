@@ -185,3 +185,7 @@ Sebagai penutup sesi dan peresmian rilis versi 1.0.0, simpan pencapaianmu ke dal
 ### Added
 - Mengimplementasikan fitur *Audit Trail* (Log Aktivitas) menggunakan *Laravel Eloquent Observers* (`AuditObserver`) untuk mendeteksi *event* `created`, `updated`, dan `deleted` pada seluruh entitas utama.
 - Membuat *Polymorphic Table* `audit_trails` untuk menyimpan rekam jejak aktor, aksi, dan matriks perubahan (*Old Values* vs *New Values*) dalam format JSON.
+## [2026-08-22]
+### Changed
+- Merevisi otak *parser CSV Sync Engine* pada `DocumentController` untuk memetakan indeks kolom secara dinamis sesuai *Standard Operating Procedure* (SOP) format surat Protik terbaru.
+- Mengimplementasikan *smart fallback logic* pada atribut `title` dan `drive_url` untuk mitigasi *null values* atau metadata kosong bawaan komputasi Pandas/SheetJS (`NaN`).

@@ -72,4 +72,91 @@ class DocumentController extends Controller
             'message' => 'Success',
         ]);
     }
+
+    public function sync(Request $request): JsonResponse
+    {
+        $url = env('TRACKING_PERSURATAN_URL');
+        
+        if (!$url) {
+            return response()->json(['message' => 'URL Sinkronisasi (TRACKING_PERSURATAN_URL) belum dikonfigurasi di .env'], 500);
+        }
+
+        try {
+            $csvData = file_get_contents($url);
+            $rows = array_map('str_getcsv', explode("\n", $csvData));
+            
+            // Mencari baris header (Mencari 'Nomor Surat' dan 'Perihal')
+            $header = [];
+            $dataStartIndex = 0;
+            foreach ($rows as $index => $row) {
+                if (in_array('Nomor Surat', $row) && in_array('Perihal', $row)) {
+                    $header = $row;
+                    $dataStartIndex = $index + 1;
+                    break;
+                }
+            }
+
+            if (empty($header)) {
+                return response()->json(['message' => 'Format Header (Nomor Surat & Perihal) tidak ditemukan pada dokumen sumber.'], 400);
+            }
+
+            $noSuratIdx = array_search('Nomor Surat', $header);
+            $perihalIdx = array_search('Perihal', $header);
+            $keteranganIdx = array_search('Keterangan', $header);
+            $linkSuratIdx = array_search('Link Surat', $header);
+            $linkScanIdx = array_search('Link Scan Surat', $header);
+
+            $success = 0;
+            $failed = 0;
+
+            for ($i = $dataStartIndex; $i < count($rows); $i++) {
+                $row = $rows[$i];
+                if (empty($row) || count($row) < 3) continue;
+
+                $noSurat = $row[$noSuratIdx] ?? null;
+                $perihal = $row[$perihalIdx] ?? null;
+                $keterangan = ($keteranganIdx !== false) ? ($row[$keteranganIdx] ?? null) : null;
+                
+                $linkScan = ($linkScanIdx !== false) ? ($row[$linkScanIdx] ?? null) : null;
+                $linkSurat = ($linkSuratIdx !== false) ? ($row[$linkSuratIdx] ?? null) : null;
+                
+                // Fallback Link: Jika Link Scan kosong, pakai Link Surat. Jika kosong juga, pakai '#'
+                $link = (!empty($linkScan) && strtolower($linkScan) !== 'nan') 
+                    ? $linkScan 
+                    : ((!empty($linkSurat) && strtolower($linkSurat) !== 'nan') ? $linkSurat : '#');
+
+                if (empty($noSurat) || strtolower($noSurat) === 'nan') continue;
+
+                // Fallback Title: Jika Perihal kosong, pakai Keterangan
+                $title = (!empty($perihal) && strtolower($perihal) !== 'nan') 
+                    ? $perihal 
+                    : ((!empty($keterangan) && strtolower($keterangan) !== 'nan') ? $keterangan : 'Tanpa Judul');
+
+                try {
+                    Document::updateOrCreate(
+                        ['letter_number' => $noSurat],
+                        [
+                            'title'      => $title,
+                            'drive_url'  => $link,
+                            'event_id'   => null, // Tersentralisasi
+                            'created_by' => auth()->id() ?? 1,
+                        ]
+                    );
+                    $success++;
+                } catch (\Exception $e) {
+                    $failed++;
+                }
+            }
+
+            return response()->json([
+                'message' => "Sinkronisasi selesai. Berhasil: $success surat. Gagal/Dilewati: $failed surat."
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Gagal mengunduh atau membaca data dari Google Sheets.',
+                'error'   => $e->getMessage()
+            ], 500);
+        }
+    }
 }
