@@ -25,11 +25,14 @@ class MeetingAttendanceTest extends TestCase
     public function test_can_list_attendances(): void
     {
         // Arrange
-        MeetingAttendance::factory()->count(3)->create();
+        $meeting = Meeting::factory()->create();
+        MeetingAttendance::factory()->count(3)->create([
+            'meeting_id' => $meeting->id,
+        ]);
 
         // Act
         $response = $this->actingAs($this->admin, 'sanctum')
-            ->getJson('/api/meeting-attendances');
+            ->getJson('/api/meeting-attendances?meeting_id=' . $meeting->id);
 
         // Assert
         $response->assertStatus(200);

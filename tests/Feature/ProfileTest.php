@@ -79,7 +79,7 @@ class ProfileTest extends TestCase
 
         $response->assertStatus(200);
         $response->assertJson([
-            'message' => 'Password berhasil diperbarui.',
+            'message' => 'Kata sandi berhasil diperbarui.',
         ]);
 
         $this->assertTrue(Hash::check('newsecret123', $this->user->fresh()->password));

@@ -25,10 +25,9 @@ class FinanceTest extends TestCase
     public function test_can_list_and_filter_finances(): void
     {
         // Arrange
-        $event = Event::factory()->create();
         Finance::create([
             'user_id'    => $this->admin->id,
-            'event_id'   => $event->id,
+            'event_id'   => null,
             'type'       => 'income',
             'title'      => 'Sponsorship Tech Conference',
             'qty'        => 1,
@@ -41,7 +40,7 @@ class FinanceTest extends TestCase
 
         Finance::create([
             'user_id'    => $this->admin->id,
-            'event_id'   => $event->id,
+            'event_id'   => null,
             'type'       => 'expense',
             'title'      => 'Beli ATK',
             'qty'        => 2,

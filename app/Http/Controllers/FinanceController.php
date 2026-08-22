@@ -27,9 +27,7 @@ class FinanceController extends Controller
             ->when($request->type, fn ($q, $type) =>
                 $q->where('type', $type)
             )
-            ->when($request->event_id, fn ($q, $eventId) =>
-                $q->where('event_id', $eventId)
-            )
+            ->where('event_id', $request->input('event_id'))
             ->when($request->start_date && $request->end_date, fn ($q) =>
                 $q->whereBetween('date', [$request->start_date, $request->end_date])
             )

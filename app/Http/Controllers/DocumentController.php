@@ -19,9 +19,7 @@ class DocumentController extends Controller
                       ->orWhere('title', 'like', "%{$search}%")
                 )
             )
-            ->when($request->event_id, fn ($q, $eventId) =>
-                $q->where('event_id', $eventId)
-            )
+            ->where('event_id', $request->input('event_id'))
             ->latest()
             ->paginate(15);
 

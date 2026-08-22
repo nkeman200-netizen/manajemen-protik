@@ -176,3 +176,8 @@ Sebagai penutup sesi dan peresmian rilis versi 1.0.0, simpan pencapaianmu ke dal
 - Membuat *migration* `add_personal_details_to_users_table` untuk mengekspansi entitas pengguna dengan kolom PII administratif (`nim`, `phone`, `prodi`, `angkatan`, `address`).
 - Mengimplementasikan `UserResource` untuk menstandarisasi *payload* data *User* yang dikirim ke *Frontend*.
 - Membuat `ProfileController` untuk melayani fungsi mutasi data diri dan pergantian kata sandi yang dilengkapi dengan *Current Password Verification*.
+## [2026-08-22]
+### Fixed
+- Menambal celah kebocoran data (*Data Bleeding*) pada seluruh Controller Direktori (`Document`, `Meeting`, `Finance`) dengan menerapkan filter `whereNull('event_id')` secara implisit untuk *workspace* BPH Pusat.
+### Added
+- Mengimplementasikan rute API baru `POST /meeting-attendances/bulk` yang melayani *Mass-Upsert* absensi rapat dengan proteksi `DB::transaction()` untuk menjaga integritas relasional data.
