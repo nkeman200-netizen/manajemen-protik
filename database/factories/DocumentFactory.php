@@ -26,7 +26,9 @@ class DocumentFactory extends Factory
             ),
             'letter_number' => strtoupper(fake()->unique()->bothify('??-###/PROTIK/####')),
             'title' => fake()->sentence(5),
-            'drive_url' => fake()->url(),
+            'letter_link' => fake()->url(),
+            'scan_link' => fake()->url(),
+            'activity_date' => fake()->date(),
         ];
     }
 }

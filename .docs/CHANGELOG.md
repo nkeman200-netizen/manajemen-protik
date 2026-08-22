@@ -189,3 +189,7 @@ Sebagai penutup sesi dan peresmian rilis versi 1.0.0, simpan pencapaianmu ke dal
 ### Changed
 - Merevisi otak *parser CSV Sync Engine* pada `DocumentController` untuk memetakan indeks kolom secara dinamis sesuai *Standard Operating Procedure* (SOP) format surat Protik terbaru.
 - Mengimplementasikan *smart fallback logic* pada atribut `title` dan `drive_url` untuk mitigasi *null values* atau metadata kosong bawaan komputasi Pandas/SheetJS (`NaN`).
+## [2026-08-23]
+### Removed
+- Melakukan *Strict Database Normalization* dengan mengeksekusi *drop column* `drive_url` pada tabel `documents` untuk mengeliminasi redundansi arsitektur.
+- Membersihkan komponen `DocumentModal.jsx` dan *Kebab Menu Actions* dari *state* dan *payload* `drive_url` lama, menggantikannya secara eksklusif dengan `letter_link` dan `scan_link`.

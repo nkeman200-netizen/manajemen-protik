@@ -35,7 +35,9 @@ class DocumentController extends Controller
             'event_id'      => ['nullable', 'exists:events,id'],
             'letter_number' => ['required', 'string', 'max:255', 'unique:documents,letter_number'],
             'title'         => ['required', 'string', 'max:255'],
-            'drive_url'     => ['required', 'string', 'max:255'],
+            'letter_link'   => ['nullable', 'string', 'max:255'],
+            'scan_link'     => ['nullable', 'string', 'max:255'],
+            'activity_date' => ['nullable', 'date'],
         ]);
 
         $document = Document::create($validated);
@@ -51,7 +53,9 @@ class DocumentController extends Controller
             'event_id'      => ['nullable', 'exists:events,id'],
             'letter_number' => ['required', 'string', 'max:255', 'unique:documents,letter_number,' . $document->id],
             'title'         => ['required', 'string', 'max:255'],
-            'drive_url'     => ['required', 'string', 'max:255'],
+            'letter_link'   => ['nullable', 'string', 'max:255'],
+            'scan_link'     => ['nullable', 'string', 'max:255'],
+            'activity_date' => ['nullable', 'date'],
         ]);
 
         $document->update($validated);
@@ -85,7 +89,7 @@ class DocumentController extends Controller
             $csvData = file_get_contents($url);
             $rows = array_map('str_getcsv', explode("\n", $csvData));
             
-            // Mencari baris header (Mencari 'Nomor Surat' dan 'Perihal')
+            // Mencari baris header
             $header = [];
             $dataStartIndex = 0;
             foreach ($rows as $index => $row) {
@@ -103,8 +107,19 @@ class DocumentController extends Controller
             $noSuratIdx = array_search('Nomor Surat', $header);
             $perihalIdx = array_search('Perihal', $header);
             $keteranganIdx = array_search('Keterangan', $header);
+            $tglBuatIdx = array_search('Tanggal Dibuat', $header);
+            $tglKegiatanIdx = array_search('Tanggal Kegiatan', $header);
             $linkSuratIdx = array_search('Link Surat', $header);
             $linkScanIdx = array_search('Link Scan Surat', $header);
+
+            // Closure cerdas untuk mitigasi bug epoch time 1970-01-01
+            $parseDate = function ($dateStr) {
+                if (empty($dateStr) || strtolower($dateStr) === 'nan') return null;
+                // Ubah slash (/) menjadi dash (-) agar PHP paham ini format DD-MM-YYYY
+                $cleanDate = str_replace('/', '-', trim($dateStr));
+                $timestamp = strtotime($cleanDate);
+                return $timestamp ? date('Y-m-d', $timestamp) : null;
+            };
 
             $success = 0;
             $failed = 0;
@@ -117,31 +132,40 @@ class DocumentController extends Controller
                 $perihal = $row[$perihalIdx] ?? null;
                 $keterangan = ($keteranganIdx !== false) ? ($row[$keteranganIdx] ?? null) : null;
                 
-                $linkScan = ($linkScanIdx !== false) ? ($row[$linkScanIdx] ?? null) : null;
-                $linkSurat = ($linkSuratIdx !== false) ? ($row[$linkSuratIdx] ?? null) : null;
+                $rawTglBuat = ($tglBuatIdx !== false) ? ($row[$tglBuatIdx] ?? null) : null;
+                $rawTglKegiatan = ($tglKegiatanIdx !== false) ? ($row[$tglKegiatanIdx] ?? null) : null;
                 
-                // Fallback Link: Jika Link Scan kosong, pakai Link Surat. Jika kosong juga, pakai '#'
-                $link = (!empty($linkScan) && strtolower($linkScan) !== 'nan') 
-                    ? $linkScan 
-                    : ((!empty($linkSurat) && strtolower($linkSurat) !== 'nan') ? $linkSurat : '#');
+                $linkSurat = ($linkSuratIdx !== false) ? ($row[$linkSuratIdx] ?? null) : null;
+                $linkScan = ($linkScanIdx !== false) ? ($row[$linkScanIdx] ?? null) : null;
 
                 if (empty($noSurat) || strtolower($noSurat) === 'nan') continue;
 
-                // Fallback Title: Jika Perihal kosong, pakai Keterangan
+                $tglBuat = $parseDate($rawTglBuat) ?? now()->toDateString();
+                $tglKegiatan = $parseDate($rawTglKegiatan);
+
                 $title = (!empty($perihal) && strtolower($perihal) !== 'nan') 
                     ? $perihal 
                     : ((!empty($keterangan) && strtolower($keterangan) !== 'nan') ? $keterangan : 'Tanpa Judul');
 
+                $cleanLinkSurat = (!empty($linkSurat) && strtolower($linkSurat) !== 'nan') ? $linkSurat : null;
+                $cleanLinkScan = (!empty($linkScan) && strtolower($linkScan) !== 'nan') ? $linkScan : null;
+
                 try {
-                    Document::updateOrCreate(
+                    $doc = Document::updateOrCreate(
                         ['letter_number' => $noSurat],
                         [
-                            'title'      => $title,
-                            'drive_url'  => $link,
-                            'event_id'   => null, // Tersentralisasi
-                            'created_by' => auth()->id() ?? 1,
+                            'title'         => $title,
+                            'letter_link'   => $cleanLinkSurat,
+                            'scan_link'     => $cleanLinkScan,
+                            'activity_date' => $tglKegiatan,
+                            'event_id'      => null,
+                            'created_by'    => auth()->id() ?? 1,
                         ]
                     );
+
+                    $doc->created_at = $tglBuat . ' 00:00:00';
+                    $doc->save();
+
                     $success++;
                 } catch (\Exception $e) {
                     $failed++;

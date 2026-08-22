@@ -9,12 +9,13 @@ class Document extends Model {
     use HasFactory;
 
     protected $fillable = [
-        'created_by', 'event_id', 'letter_number', 'title', 'drive_url',
+        'created_by', 'event_id', 'letter_number', 'title', 'letter_link', 'scan_link', 'activity_date'
     ];
 
     protected $casts = [
-        'created_by' => 'integer',
-        'event_id' => 'integer',
+        'created_by'    => 'integer',
+        'event_id'      => 'integer',
+        'activity_date' => 'date',
     ];
 
     public function creator(): BelongsTo {
