@@ -181,3 +181,7 @@ Sebagai penutup sesi dan peresmian rilis versi 1.0.0, simpan pencapaianmu ke dal
 - Menambal celah kebocoran data (*Data Bleeding*) pada seluruh Controller Direktori (`Document`, `Meeting`, `Finance`) dengan menerapkan filter `whereNull('event_id')` secara implisit untuk *workspace* BPH Pusat.
 ### Added
 - Mengimplementasikan rute API baru `POST /meeting-attendances/bulk` yang melayani *Mass-Upsert* absensi rapat dengan proteksi `DB::transaction()` untuk menjaga integritas relasional data.
+## [2026-08-22]
+### Added
+- Mengimplementasikan fitur *Audit Trail* (Log Aktivitas) menggunakan *Laravel Eloquent Observers* (`AuditObserver`) untuk mendeteksi *event* `created`, `updated`, dan `deleted` pada seluruh entitas utama.
+- Membuat *Polymorphic Table* `audit_trails` untuk menyimpan rekam jejak aktor, aksi, dan matriks perubahan (*Old Values* vs *New Values*) dalam format JSON.

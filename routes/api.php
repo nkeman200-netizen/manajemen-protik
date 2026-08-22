@@ -2,6 +2,7 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\AuditTrailController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DivisionController;
 use App\Http\Controllers\DocumentController;
@@ -52,6 +53,9 @@ Route::middleware('auth:sanctum')->group(function () {
     // --- STRICT ADMIN WRITE ENDPOINTS ---
     // (HANYA boleh diakses oleh Administrator BPH Pusat)
     Route::middleware('role:admin')->group(function () {
+        // Audit Trails
+        Route::get('/audit-trails', [AuditTrailController::class, 'index']);
+
         // Master Data
         Route::put('/users/{user}', [UserController::class, 'update']);
         Route::post('/divisions', [DivisionController::class, 'store']);
