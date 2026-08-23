@@ -73,21 +73,17 @@ class AgendaController extends Controller
 
             $parseDate = function ($dateStr) {
                 if (empty($dateStr) || strtolower(trim($dateStr)) === 'nat' || strtolower(trim($dateStr)) === 'nan') return null;
-                try {
-                    return Carbon::parse(trim($dateStr))->format('Y-m-d H:i:s');
-                } catch (\Exception $e) {
-                    return null;
+                try { 
+                    // FIX UTAMA: Ubah garis miring (/) menjadi strip (-) agar dikenali sebagai format DD-MM-YYYY oleh PHP/Carbon
+                    $cleanDate = str_replace('/', '-', trim($dateStr));
+                    return Carbon::parse($cleanDate)->format('Y-m-d H:i:s'); 
+                } catch (\Exception $e) { 
+                    return null; 
                 }
             };
             
-            $parseUrl = function ($urlStr) {
-                return filter_var(trim($urlStr), FILTER_VALIDATE_URL) ? trim($urlStr) : null;
-            };
-            $val = function($row, $index) {
-                if ($index === false || !isset($row[$index])) return null;
-                $v = trim($row[$index]);
-                return (strtolower($v) === 'nan' || $v === '') ? null : $v;
-            };
+            $parseUrl = function ($urlStr) { return filter_var(trim($urlStr), FILTER_VALIDATE_URL) ? trim($urlStr) : null; };
+            $val = function($row, $index) { if ($index === false || !isset($row[$index])) return null; $v = trim($row[$index]); return (strtolower($v) === 'nan' || $v === '') ? null : $v; };
 
             $successCount = 0;
 
@@ -126,8 +122,6 @@ class AgendaController extends Controller
             $target = $eventId ? "Kepanitiaan" : "BPH Pusat";
             return response()->json(['message' => "Sinkronisasi selesai. Berhasil menyinkronkan $successCount agenda $target."]);
 
-        } catch (\Exception $e) {
-            return response()->json(['message' => 'Gagal menyinkronisasi data agenda.', 'error' => $e->getMessage()], 500);
-        }
+        } catch (\Exception $e) { return response()->json(['message' => 'Gagal menyinkronisasi data agenda.', 'error' => $e->getMessage()], 500); }
     }
 }
