@@ -2,6 +2,7 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\AgendaController;
 use App\Http\Controllers\AuditTrailController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DivisionController;
@@ -9,8 +10,6 @@ use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\EventCommitteeController;
 use App\Http\Controllers\EventController;
 use App\Http\Controllers\FinanceController;
-use App\Http\Controllers\MeetingAttendanceController;
-use App\Http\Controllers\MeetingController;
 use App\Http\Controllers\MonthlyDueController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\RoleController;
@@ -33,8 +32,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // --- READ-ONLY / GENERAL ENDPOINTS ---
     // (Aman diakses semua role yang login untuk keperluan fetch data)
     Route::get('/events', [EventController::class, 'index']);
-    Route::get('/meetings', [MeetingController::class, 'index']);
-    Route::get('/meeting-attendances', [MeetingAttendanceController::class, 'index']);
+    Route::get('/agendas', [AgendaController::class, 'index']);
     Route::get('/documents', [DocumentController::class, 'index']);
     Route::get('/warnings', [WarningController::class, 'index']);
     Route::get('/finances', [FinanceController::class, 'index']);
@@ -44,13 +42,11 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // --- CONTEXTUAL AUTH RESOURCES ---
     // (Bisa di-POST/PUT oleh Admin DAN anggota BPH Event via Authorization Policy)
-    Route::post('/meeting-attendances', [MeetingAttendanceController::class, 'store']);
-    Route::post('/meeting-attendances/bulk', [MeetingAttendanceController::class, 'bulkStore']);
+    Route::post('/agendas/sync', [AgendaController::class, 'sync']);
     Route::post('/finances/sync', [FinanceController::class, 'sync']);
     Route::apiResource('finances', FinanceController::class)->except(['create', 'edit', 'index']);
     Route::post('/documents/sync', [DocumentController::class, 'sync']);
     Route::apiResource('documents', DocumentController::class)->except(['create', 'edit', 'index']);
-    Route::apiResource('meetings', MeetingController::class)->except(['create', 'edit', 'index']);
     Route::apiResource('events', EventController::class)->except(['create', 'edit', 'index']);
 
     // --- STRICT ADMIN WRITE ENDPOINTS ---

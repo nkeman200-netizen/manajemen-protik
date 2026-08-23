@@ -1,10 +1,11 @@
 <?php
+
 namespace Tests\Feature;
 
 use App\Models\Document;
 use App\Models\Event;
 use App\Models\Finance;
-use App\Models\Meeting;
+use App\Models\Agenda;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -72,22 +73,18 @@ class DashboardTest extends TestCase
         ]);
 
         // 2. Events - Aktif & Tidak Aktif
-        // Aktif: start_date <= today AND end_date >= today
         Event::factory()->create([
             'start_date' => $now->copy()->subDays(2)->toDateString(),
             'end_date'   => $now->copy()->addDays(3)->toDateString(),
         ]);
-        // Aktif: start_date <= today AND end_date IS NULL
         Event::factory()->create([
             'start_date' => $now->copy()->subDays(1)->toDateString(),
             'end_date'   => null,
         ]);
-        // Tidak Aktif: sudah lewat
         Event::factory()->create([
             'start_date' => $now->copy()->subMonth()->toDateString(),
             'end_date'   => $now->copy()->subMonth()->addDays(5)->toDateString(),
         ]);
-        // Tidak Aktif: belum mulai (start_date > today)
         Event::factory()->create([
             'start_date' => $now->copy()->addMonth()->toDateString(),
             'end_date'   => $now->copy()->addMonth()->addDays(5)->toDateString(),
@@ -103,12 +100,14 @@ class DashboardTest extends TestCase
             'created_at' => $lastMonth,
         ]);
 
-        // 4. Meetings - Bulan Ini vs Bulan Lalu
-        Meeting::factory()->create([
-            'date' => $now->toDateTimeString(),
+        // 4. Agendas - Bulan Ini vs Bulan Lalu
+        Agenda::create([
+            'title'      => 'Agenda Bulan Ini',
+            'start_date' => $now->toDateTimeString(),
         ]);
-        Meeting::factory()->create([
-            'date' => $lastMonth->toDateTimeString(),
+        Agenda::create([
+            'title'      => 'Agenda Bulan Lalu',
+            'start_date' => $lastMonth->toDateTimeString(),
         ]);
 
         // Act
@@ -121,7 +120,7 @@ class DashboardTest extends TestCase
             'message' => 'Success',
             'data' => [
                 'financial_health' => [
-                    'total_balance'      => 1000.00, // (1000 + 500) - (300 + 200) = 1000
+                    'total_balance'      => 1000.00,
                     'income_this_month'  => 1000.00,
                     'expense_this_month' => 300.00,
                 ],
@@ -155,17 +154,17 @@ class DashboardTest extends TestCase
             ]);
         }
 
-        // Past Meetings
-        Meeting::factory()->create([
-            'title' => 'Past Meeting 1',
-            'date'  => $now->copy()->subDays(5)->toDateTimeString(),
+        // Past Agendas
+        Agenda::create([
+            'title'      => 'Past Agenda 1',
+            'start_date' => $now->copy()->subDays(5)->toDateTimeString(),
         ]);
 
-        // Future Meetings (7 meetings to test limit 5 and sorting)
+        // Future Agendas (7 agendas to test limit 5 and sorting)
         for ($i = 1; $i <= 7; $i++) {
-            Meeting::factory()->create([
-                'title' => "Future Meeting $i",
-                'date'  => $now->copy()->addDays($i)->toDateTimeString(),
+            Agenda::create([
+                'title'      => "Future Agenda $i",
+                'start_date' => $now->copy()->addDays($i)->toDateTimeString(),
             ]);
         }
 
@@ -183,7 +182,7 @@ class DashboardTest extends TestCase
         $this->assertEquals('Future Event 5', $events[4]['name']);
 
         $meetings = $response->json('data.upcoming_meetings');
-        $this->assertEquals('Future Meeting 1', $meetings[0]['title']);
-        $this->assertEquals('Future Meeting 5', $meetings[4]['title']);
+        $this->assertEquals('Future Agenda 1', $meetings[0]['title']);
+        $this->assertEquals('Future Agenda 5', $meetings[4]['title']);
     }
 }

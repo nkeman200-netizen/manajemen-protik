@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Http\Resources\DocumentResource;
 use App\Models\Document;
+use App\Models\Event;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -79,30 +81,41 @@ class DocumentController extends Controller
 
     public function sync(Request $request): JsonResponse
     {
-        $url = env('TRACKING_PERSURATAN_URL');
-        
-        if (!$url) {
-            return response()->json(['message' => 'URL Sinkronisasi (TRACKING_PERSURATAN_URL) belum dikonfigurasi di .env'], 500);
+        $eventId = $request->input('event_id');
+
+        if ($eventId) {
+            $event = Event::find($eventId);
+            if (!$event || empty($event->document_sync_url)) {
+                return response()->json(['message' => 'URL Sinkronisasi Dokumen untuk Event ini belum diatur.'], 400);
+            }
+            $url = $event->document_sync_url;
+        } else {
+            $url = env('TRACKING_PERSURATAN_URL');
+            if (!$url) return response()->json(['message' => 'URL Sinkronisasi Dokumen BPH Pusat belum dikonfigurasi.'], 500);
         }
 
+        $separator = str_contains($url, '?') ? '&' : '?';
+        $freshUrl = $url . $separator . 'cb=' . time();
+
         try {
-            $csvData = file_get_contents($url);
+            $context = stream_context_create(['http' => ['header' => "Cache-Control: no-cache\r\n"]]);
+            $csvData = file_get_contents($freshUrl, false, $context);
             $rows = array_map('str_getcsv', explode("\n", $csvData));
             
-            // Mencari baris header
             $header = [];
             $dataStartIndex = 0;
+            
+            // FIX: Sanitasi Header menggunakan trim
             foreach ($rows as $index => $row) {
-                if (in_array('Nomor Surat', $row) && in_array('Perihal', $row)) {
-                    $header = $row;
+                $cleanRow = array_map('trim', $row);
+                if (in_array('Nomor Surat', $cleanRow) && in_array('Perihal', $cleanRow)) {
+                    $header = $cleanRow;
                     $dataStartIndex = $index + 1;
                     break;
                 }
             }
 
-            if (empty($header)) {
-                return response()->json(['message' => 'Format Header (Nomor Surat & Perihal) tidak ditemukan pada dokumen sumber.'], 400);
-            }
+            if (empty($header)) return response()->json(['message' => 'Format Header (Nomor Surat & Perihal) tidak ditemukan.'], 400);
 
             $noSuratIdx = array_search('Nomor Surat', $header);
             $perihalIdx = array_search('Perihal', $header);
@@ -112,59 +125,53 @@ class DocumentController extends Controller
             $linkSuratIdx = array_search('Link Surat', $header);
             $linkScanIdx = array_search('Link Scan Surat', $header);
 
-            // Closure cerdas untuk mitigasi bug epoch time 1970-01-01
             $parseDate = function ($dateStr) {
-                if (empty($dateStr) || strtolower($dateStr) === 'nan') return null;
-                // Ubah slash (/) menjadi dash (-) agar PHP paham ini format DD-MM-YYYY
-                $cleanDate = str_replace('/', '-', trim($dateStr));
-                $timestamp = strtotime($cleanDate);
-                return $timestamp ? date('Y-m-d', $timestamp) : null;
+                try {
+                    return Carbon::parse(str_replace('/', '-', trim($dateStr)))->format('Y-m-d');
+                } catch (\Exception $e) {
+                    return null;
+                }
+            };
+            $parseUrl = function ($urlStr) {
+                return filter_var(trim($urlStr), FILTER_VALIDATE_URL) ? trim($urlStr) : null;
             };
 
             $success = 0;
             $failed = 0;
 
             for ($i = $dataStartIndex; $i < count($rows); $i++) {
-                $row = $rows[$i];
+                // FIX: Sanitasi seluruh isi baris untuk membersihkan spasi tak kasat mata
+                $row = array_map('trim', $rows[$i]);
                 if (empty($row) || count($row) < 3) continue;
 
                 $noSurat = $row[$noSuratIdx] ?? null;
                 $perihal = $row[$perihalIdx] ?? null;
-                $keterangan = ($keteranganIdx !== false) ? ($row[$keteranganIdx] ?? null) : null;
                 
-                $rawTglBuat = ($tglBuatIdx !== false) ? ($row[$tglBuatIdx] ?? null) : null;
-                $rawTglKegiatan = ($tglKegiatanIdx !== false) ? ($row[$tglKegiatanIdx] ?? null) : null;
-                
-                $linkSurat = ($linkSuratIdx !== false) ? ($row[$linkSuratIdx] ?? null) : null;
-                $linkScan = ($linkScanIdx !== false) ? ($row[$linkScanIdx] ?? null) : null;
-
+                // FIX: Validasi ketat terhadap spasi kosong
                 if (empty($noSurat) || strtolower($noSurat) === 'nan') continue;
 
-                $tglBuat = $parseDate($rawTglBuat) ?? now()->toDateString();
-                $tglKegiatan = $parseDate($rawTglKegiatan);
-
-                $title = (!empty($perihal) && strtolower($perihal) !== 'nan') 
-                    ? $perihal 
-                    : ((!empty($keterangan) && strtolower($keterangan) !== 'nan') ? $keterangan : 'Tanpa Judul');
-
-                $cleanLinkSurat = (!empty($linkSurat) && strtolower($linkSurat) !== 'nan') ? $linkSurat : null;
-                $cleanLinkScan = (!empty($linkScan) && strtolower($linkScan) !== 'nan') ? $linkScan : null;
+                $tglBuat = $parseDate(($tglBuatIdx !== false) ? ($row[$tglBuatIdx] ?? null) : null) ?? now()->toDateString();
+                $title = (!empty($perihal) && strtolower($perihal) !== 'nan') ? $perihal : 'Tanpa Judul';
 
                 try {
                     $doc = Document::updateOrCreate(
-                        ['letter_number' => $noSurat],
+                        [
+                            'letter_number' => $noSurat,
+                            'event_id'      => $eventId ? (int)$eventId : null,
+                        ],
                         [
                             'title'         => $title,
-                            'letter_link'   => $cleanLinkSurat,
-                            'scan_link'     => $cleanLinkScan,
-                            'activity_date' => $tglKegiatan,
-                            'event_id'      => null,
+                            'letter_link'   => $parseUrl(($linkSuratIdx !== false) ? ($row[$linkSuratIdx] ?? null) : null),
+                            'scan_link'     => $parseUrl(($linkScanIdx !== false) ? ($row[$linkScanIdx] ?? null) : null),
+                            'activity_date' => $parseDate(($tglKegiatanIdx !== false) ? ($row[$tglKegiatanIdx] ?? null) : null),
                             'created_by'    => auth()->id() ?? 1,
                         ]
                     );
 
+                    $doc->timestamps = false;
                     $doc->created_at = $tglBuat . ' 00:00:00';
                     $doc->save();
+                    $doc->timestamps = true;
 
                     $success++;
                 } catch (\Exception $e) {
@@ -172,15 +179,10 @@ class DocumentController extends Controller
                 }
             }
 
-            return response()->json([
-                'message' => "Sinkronisasi selesai. Berhasil: $success surat. Gagal/Dilewati: $failed surat."
-            ]);
+            return response()->json(['message' => "Sinkronisasi selesai. Berhasil: $success surat. Gagal/Dilewati: $failed surat."]);
 
         } catch (\Exception $e) {
-            return response()->json([
-                'message' => 'Gagal mengunduh atau membaca data dari Google Sheets.',
-                'error'   => $e->getMessage()
-            ], 500);
+            return response()->json(['message' => 'Gagal menyinkronisasi data.', 'error' => $e->getMessage()], 500);
         }
     }
 }

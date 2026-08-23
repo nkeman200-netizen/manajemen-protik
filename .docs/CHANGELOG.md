@@ -210,3 +210,7 @@ Sebagai penutup sesi dan peresmian rilis versi 1.0.0, simpan pencapaianmu ke dal
 ## [2026-08-23]
 ### Added
 - Melakukan mutasi arsitektural pada tabel `events` dengan menambahkan kolom *metadata* `document_sync_url` dan `finance_sync_url`. Modifikasi ini menginisiasi transisi sistem dari *Centralized BPH Sync* menjadi ekosistem *Distributed Cloud Sync* berskala *Multi-Event*.
+## [2026-08-23]
+### Changed
+- Mengeksekusi *Refactoring* arsitektural skala masif: mengubah ekosistem `Meetings` menjadi entitas `Agendas`. Perubahan ini mencakup skema *Database* (kolom `start_date`, `end_date`, `location`, `pic`, `status`), Models ORM, dan relasi *Foreign Key* absensi.
+- Memusnahkan `MeetingController` dan menggantinya dengan `AgendaController` yang ditenagai oleh mesin *Context-Aware Cloud Sync (Wipe & Reload)*, menjadikan *Spreadsheet* Daftar Agenda sebagai *Single Source of Truth* (SSOT) yang *Future-Proof*.

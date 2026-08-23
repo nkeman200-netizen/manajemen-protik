@@ -20,7 +20,7 @@ class SecurityTest extends TestCase
         Role::firstOrCreate(['name' => 'advisor', 'guard_name' => 'web']);
     }
 
-    public function test_member_is_forbidden_from_creating_meeting(): void
+    public function test_member_is_forbidden_from_creating_divisions(): void
     {
         // Arrange
         $member = User::factory()->create();
@@ -28,34 +28,34 @@ class SecurityTest extends TestCase
 
         // Act
         $response = $this->actingAs($member, 'sanctum')
-            ->postJson('/api/meetings', [
-                'title' => 'Rapat Ilegal',
-                'date'  => '2026-08-20 10:00:00',
+            ->postJson('/api/divisions', [
+                'name'        => 'Divisi Ilegal',
+                'description' => 'Divisi Test',
             ]);
 
         // Assert
         $response->assertStatus(403);
-        $this->assertDatabaseMissing('meetings', ['title' => 'Rapat Ilegal']);
+        $this->assertDatabaseMissing('divisions', ['name' => 'Divisi Ilegal']);
     }
 
-    public function test_admin_can_create_meeting(): void
+    public function test_admin_can_create_divisions(): void
     {
         // Arrange
         $admin = User::factory()->create();
         $admin->assignRole('admin');
 
         $payload = [
-            'title' => 'Rapat Koordinasi Admin',
-            'date'  => '2026-08-20 14:00:00',
+            'name'        => 'Divisi Humas',
+            'description' => 'Divisi Hubungan Masyarakat',
         ];
 
         // Act
         $response = $this->actingAs($admin, 'sanctum')
-            ->postJson('/api/meetings', $payload);
+            ->postJson('/api/divisions', $payload);
 
         // Assert
         $response->assertStatus(201);
-        $this->assertDatabaseHas('meetings', ['title' => 'Rapat Koordinasi Admin']);
+        $this->assertDatabaseHas('divisions', ['name' => 'Divisi Humas']);
     }
 
     public function test_member_can_only_see_own_warnings(): void

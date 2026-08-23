@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Resources\FinanceResource;
+use App\Models\Event;
 use App\Models\Finance;
 use App\Services\FinanceService;
 use Carbon\Carbon;
@@ -123,10 +124,17 @@ class FinanceController extends Controller
 
     public function sync(Request $request): JsonResponse
     {
-        $url = env('TRACKING_KEUANGAN_URL');
-        
-        if (!$url) {
-            return response()->json(['message' => 'URL Sinkronisasi Keuangan belum dikonfigurasi di .env'], 500);
+        $eventId = $request->input('event_id');
+
+        if ($eventId) {
+            $event = Event::find($eventId);
+            if (!$event || empty($event->finance_sync_url)) {
+                return response()->json(['message' => 'URL Sinkronisasi Keuangan untuk Event ini belum diatur.'], 400);
+            }
+            $url = $event->finance_sync_url;
+        } else {
+            $url = env('TRACKING_KEUANGAN_URL');
+            if (!$url) return response()->json(['message' => 'URL Sinkronisasi Keuangan BPH Pusat belum dikonfigurasi.'], 500);
         }
 
         $separator = str_contains($url, '?') ? '&' : '?';
@@ -140,18 +148,16 @@ class FinanceController extends Controller
             $header = [];
             $dataStartIndex = 0;
             foreach ($rows as $index => $row) {
-                // FIX: Trim semua elemen row untuk membuang spasi tak kasat mata (Hidden Space)
                 $cleanRow = array_map('trim', $row);
-                if (in_array('Tipe', $cleanRow) || in_array('Tipe (Pemasukan/Pengeluaran)', $cleanRow)) {
+                $rowString = strtolower(implode(' | ', $cleanRow));
+                if (str_contains($rowString, 'tipe') && str_contains($rowString, 'rincian')) {
                     $header = $cleanRow;
                     $dataStartIndex = $index + 1;
                     break;
                 }
             }
 
-            if (empty($header)) {
-                return response()->json(['message' => 'Format Header (Tipe, Rincian, dll) tidak ditemukan.'], 400);
-            }
+            if (empty($header)) return response()->json(['message' => 'Format Header tidak ditemukan.'], 400);
 
             $idx = [
                 'tgl'      => array_search('Tanggal (YYYY-MM-DD)', $header) ?: array_search('Tanggal', $header),
@@ -169,38 +175,31 @@ class FinanceController extends Controller
             ];
 
             $parseDate = function ($dateStr) {
-                if (empty($dateStr) || strtolower(trim($dateStr)) === 'nan') return null;
                 try {
-                    $cleanDate = str_replace('/', '-', trim($dateStr));
-                    return Carbon::parse($cleanDate)->format('Y-m-d');
-                } catch (\Exception $e) { return null; }
+                    return Carbon::parse(str_replace('/', '-', trim($dateStr)))->format('Y-m-d');
+                } catch (\Exception $e) {
+                    return null;
+                }
             };
-
             $parseUrl = function ($urlStr) {
-                if (empty($urlStr) || strtolower(trim($urlStr)) === 'nan') return null;
-                $cleanUrl = trim($urlStr);
-                if (!preg_match("~^(?:f|ht)tps?://~i", $cleanUrl)) return null;
-                return filter_var($cleanUrl, FILTER_VALIDATE_URL) ? $cleanUrl : null;
+                return filter_var(trim($urlStr), FILTER_VALIDATE_URL) ? trim($urlStr) : null;
             };
-
-            // FIX: Menghapus simbol mata uang (Rp) dan pemisah ribuan
             $parsePrice = function ($priceStr) {
-                if (empty($priceStr) || strtolower(trim($priceStr)) === 'nan') return 0;
-                // Pisahkan koma desimal (Rp416.000,00 -> Rp416.000)
-                $priceStr = explode(',', $priceStr)[0];
-                $cleanPrice = preg_replace('/[^0-9]/', '', $priceStr);
-                return (float) $cleanPrice;
+                return (float) preg_replace('/[^0-9]/', '', explode(',', trim($priceStr))[0] ?? '0');
             };
-
             $val = function($row, $index) {
                 if ($index === false || !isset($row[$index])) return null;
                 $v = trim($row[$index]);
                 return (strtolower($v) === 'nan' || $v === '') ? null : $v;
             };
 
-            DB::transaction(function () use ($rows, $dataStartIndex, $idx, $parseDate, $parseUrl, $parsePrice, $val) {
-                // WIPE KAS UMUM (Event ID IS NULL)
-                Finance::whereNull('event_id')->delete();
+            // FIX UTAMA: Menyuntikkan $eventId ke dalam use(...)
+            DB::transaction(function () use ($rows, $dataStartIndex, $idx, $parseDate, $parseUrl, $parsePrice, $val, $eventId) {
+                if ($eventId) {
+                    Finance::where('event_id', $eventId)->delete();
+                } else {
+                    Finance::whereNull('event_id')->delete();
+                }
 
                 for ($i = $dataStartIndex; $i < count($rows); $i++) {
                     $row = $rows[$i];
@@ -208,19 +207,15 @@ class FinanceController extends Controller
 
                     $rincian = $val($row, $idx['rincian']);
                     $tipeRaw = $val($row, $idx['tipe']);
-                    
                     if (!$rincian || !$tipeRaw) continue;
 
                     $type = (stripos($tipeRaw, 'masuk') !== false || strtolower($tipeRaw) === 'income') ? 'income' : 'expense';
-                    $date = $parseDate($val($row, $idx['tgl'])) ?? now()->toDateString();
-                    
                     $qty = (float) ($val($row, $idx['vol']) ?? 1);
                     $price = $parsePrice($val($row, $idx['harga']));
-                    $totalAmount = $qty * $price;
 
                     Finance::create([
                         'user_id'        => auth()->id() ?? 1,
-                        'event_id'       => null,
+                        'event_id'       => $eventId ? (int)$eventId : null,
                         'type'           => $type,
                         'category'       => $val($row, $idx['kategori']),
                         'title'          => $rincian,
@@ -228,21 +223,21 @@ class FinanceController extends Controller
                         'qty'            => $qty,
                         'unit'           => $val($row, $idx['satuan']),
                         'unit_price'     => $price,
-                        'amount'         => $totalAmount,
+                        'amount'         => $qty * $price,
                         'funding_source' => $val($row, $idx['sumber']),
                         'pic'            => $val($row, $idx['pic']),
                         'payment_method' => $val($row, $idx['metode']),
                         'receipt_url'    => $parseUrl($val($row, $idx['nota'])),
                         'notes'          => $val($row, $idx['ket']),
-                        'date'           => $date,
+                        'date'           => $parseDate($val($row, $idx['tgl'])) ?? now()->toDateString(),
                     ]);
                 }
             });
 
-            return response()->json(['message' => "Sinkronisasi Kas Umum berhasil. Laporan keuangan telah diperbarui dari Cloud."]);
+            return response()->json(['message' => "Sinkronisasi berhasil."]);
 
         } catch (\Exception $e) {
-            return response()->json(['message' => 'Gagal menyinkronisasi data keuangan.', 'error' => $e->getMessage()], 500);
+            return response()->json(['message' => 'Gagal menyinkronisasi data.', 'error' => $e->getMessage()], 500);
         }
     }
 }

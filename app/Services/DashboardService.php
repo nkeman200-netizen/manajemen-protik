@@ -2,10 +2,10 @@
 
 namespace App\Services;
 
+use App\Models\Agenda;
 use App\Models\Document;
 use App\Models\Event;
 use App\Models\Finance;
-use App\Models\Meeting;
 use Carbon\Carbon;
 
 class DashboardService
@@ -40,8 +40,8 @@ class DashboardService
             ->whereYear('created_at', $now->year)
             ->count();
 
-        $meetingsThisMonth = Meeting::whereMonth('date', $now->month)
-            ->whereYear('date', $now->year)
+        $agendasThisMonth = Agenda::whereMonth('start_date', $now->month)
+            ->whereYear('start_date', $now->year)
             ->count();
 
         return [
@@ -55,7 +55,7 @@ class DashboardService
             ],
             'organizational_activity' => [
                 'documents_issued_this_month' => $documentsIssuedThisMonth,
-                'meetings_this_month'         => $meetingsThisMonth,
+                'meetings_this_month'         => $agendasThisMonth,
             ],
         ];
     }
@@ -69,14 +69,14 @@ class DashboardService
             ->limit(5)
             ->get();
 
-        $upcomingMeetings = Meeting::where('date', '>=', $today)
-            ->orderBy('date', 'asc')
+        $upcomingAgendas = Agenda::where('start_date', '>=', $today)
+            ->orderBy('start_date', 'asc')
             ->limit(5)
             ->get();
 
         return [
             'upcoming_events'   => $upcomingEvents,
-            'upcoming_meetings' => $upcomingMeetings,
+            'upcoming_meetings' => $upcomingAgendas,
         ];
     }
 }
