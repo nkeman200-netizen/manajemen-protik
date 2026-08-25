@@ -241,3 +241,7 @@ Sebagai penutup sesi dan peresmian rilis versi 1.0.0, simpan pencapaianmu ke dal
 - Merefaktorisasi seluruh operasi manipulasi dan ekstraksi CSV *Cloud Sync* (Agenda, Kas, Dokumen, Keuangan) dari *Controllers* ke dalam lapisan abstraksi `SyncService`. Implementasi ini mengeksekusi prinsip *Separation of Concerns* (SoC) dan memusatkan kapabilitas *Error Handling*.
 - Mengganti arsitektur agregasi *Agenda Participation Rate* pada `DashboardService` dari *Collection iteration* (`->count()`) menuju perhitungan *Database-Level* (`withCount()`). Pendekatan ini mengeleminasi anomali *N+1 Query* dan mencegah *Out of Memory* (OOM) pada komputasi skala besar.
 - Mengimplementasikan `LazyCollection` via metode `->cursor()` pada agregator ekspor `FinanceController` untuk mengoptimalkan *throughput* serialisasi JSON data masif tanpa membebani RAM server.
+## [2026-08-25]
+### Changed
+- Merefaktorisasi algoritma *Cloud Sync Engine* pada `SyncService.php` (Modul Keuangan) dari strategi destruktif *Wipe & Reload* menjadi *Smart Composite Key Upsert* (`firstOrNew`). Evaluasi *Null Coalescing* (`??`) diterapkan untuk melindungi data parsial (PIC, Kategori, Sumber Dana) yang diinput melalui antarmuka web agar tidak tertimpa oleh sel kosong dari Spreadsheet.
+- Mencabut limitasi skema Paginasi (15 baris) pada `UserController.php` (Modul Master Data). Data pengguna kini diekstraksi secara komprehensif (`get()`) dalam satu muatan JSON untuk memfasilitasi visibilitas hierarki pengurus secara utuh tanpa hambatan UX dari fitur tombol *Next/Prev*.

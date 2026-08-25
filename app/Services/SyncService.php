@@ -121,7 +121,8 @@ class SyncService
 
         $successCount = 0;
         DB::transaction(function () use ($rows, $dataStartIndex, $idx, $parseDate, $val, $eventId, &$successCount) {
-            $eventId ? Agenda::where('event_id', $eventId)->delete() : Agenda::whereNull('event_id')->delete();
+            // HAPUS Logika Wipe & Reload agar ID tidak berubah
+            // $eventId ? Agenda::where('event_id', $eventId)->delete() : Agenda::whereNull('event_id')->delete();
 
             for ($i = $dataStartIndex; $i < count($rows); $i++) {
                 $row = array_map('trim', $rows[$i]);
@@ -131,22 +132,28 @@ class SyncService
                 $start = $parseDate($val($row, $idx['start']));
                 if (empty($nama) || !$start) continue;
 
-                Agenda::create([
-                    'event_id'    => $eventId ? (int)$eventId : null,
-                    'title'       => $nama,
-                    'start_date'  => $start,
-                    'end_date'    => $parseDate($val($row, $idx['end'])),
-                    'location'    => $val($row, $idx['tempat']),
-                    'pic'         => $val($row, $idx['pj']),
-                    'status'      => $val($row, $idx['status']),
-                    'minutes_url' => filter_var($val($row, $idx['notulensi']), FILTER_VALIDATE_URL) ? $val($row, $idx['notulensi']) : null,
+                // 1. SMART UPSERT: Cari data berdasarkan Nama + Tanggal Mulai + Event ID
+                $agenda = Agenda::firstOrNew([
+                    'event_id'   => $eventId ? (int)$eventId : null,
+                    'title'      => $nama,
+                    'start_date' => $start,
                 ]);
+
+                // 2. UPDATE SELECTIVE: Gunakan data CSV jika ada. Jika CSV kosong, pertahankan data DB.
+                $agenda->end_date    = $parseDate($val($row, $idx['end'])) ?? $agenda->end_date;
+                $agenda->location    = $val($row, $idx['tempat']) ?? $agenda->location;
+                $agenda->pic         = $val($row, $idx['pj']) ?? $agenda->pic;
+                $agenda->status      = $val($row, $idx['status']) ?? $agenda->status;
+                
+                $parsedUrl = filter_var($val($row, $idx['notulensi']), FILTER_VALIDATE_URL);
+                $agenda->minutes_url = $parsedUrl ? $parsedUrl : $agenda->minutes_url;
+
+                $agenda->save();
                 $successCount++;
             }
         });
 
-        $target = $eventId ? "Kepanitiaan" : "BPH Pusat";
-        return ['message' => "Sinkronisasi selesai. Berhasil menyinkronkan $successCount agenda $target."];
+        return ['message' => "Sinkronisasi selesai. Berhasil menyinkronkan $successCount agenda."];
     }
 
     public function syncDocuments(?int $eventId, string $url, int $userId): array
@@ -281,11 +288,8 @@ class SyncService
         };
 
         DB::transaction(function () use ($rows, $dataStartIndex, $idx, $parseDate, $parseUrl, $parsePrice, $val, $eventId, $userId) {
-            if ($eventId) {
-                Finance::where('event_id', $eventId)->delete();
-            } else {
-                Finance::whereNull('event_id')->delete();
-            }
+            // HAPUS Logika Wipe & Reload
+            // if ($eventId) { Finance::where('event_id', $eventId)->delete(); } else { Finance::whereNull('event_id')->delete(); }
 
             for ($i = $dataStartIndex; $i < count($rows); $i++) {
                 $row = $rows[$i];
@@ -298,25 +302,33 @@ class SyncService
                 $type = (stripos($tipeRaw, 'masuk') !== false || strtolower($tipeRaw) === 'income') ? 'income' : 'expense';
                 $qty = (float) ($val($row, $idx['vol']) ?? 1);
                 $price = $parsePrice($val($row, $idx['harga']));
+                $tgl = $parseDate($val($row, $idx['tgl'])) ?? now()->toDateString();
 
-                Finance::create([
-                    'user_id'        => $userId,
-                    'event_id'       => $eventId ? (int)$eventId : null,
-                    'type'           => $type,
-                    'category'       => $val($row, $idx['kategori']),
-                    'title'          => $rincian,
-                    'description'    => $rincian,
-                    'qty'            => $qty,
-                    'unit'           => $val($row, $idx['satuan']),
-                    'unit_price'     => $price,
-                    'amount'         => $qty * $price,
-                    'funding_source' => $val($row, $idx['sumber']),
-                    'pic'            => $val($row, $idx['pic']),
-                    'payment_method' => $val($row, $idx['metode']),
-                    'receipt_url'    => $parseUrl($val($row, $idx['nota'])),
-                    'notes'          => $val($row, $idx['ket']),
-                    'date'           => $parseDate($val($row, $idx['tgl'])) ?? now()->toDateString(),
+                // 1. SMART UPSERT: Gunakan Event ID, Tipe, Rincian, dan Tanggal sebagai Composite Key
+                $finance = Finance::firstOrNew([
+                    'event_id' => $eventId ? (int)$eventId : null,
+                    'type'     => $type,
+                    'title'    => $rincian,
+                    'date'     => $tgl,
                 ]);
+
+                // 2. SELECTIVE UPDATE: Pertahankan data di DB jika CSV kosong
+                $finance->user_id        = $finance->exists ? $finance->user_id : $userId;
+                $finance->description    = $rincian;
+                $finance->qty            = $qty;
+                $finance->unit           = $val($row, $idx['satuan']) ?? $finance->unit;
+                $finance->unit_price     = $price;
+                $finance->amount         = $qty * $price;
+                $finance->category       = $val($row, $idx['kategori']) ?? $finance->category;
+                $finance->funding_source = $val($row, $idx['sumber']) ?? $finance->funding_source;
+                $finance->pic            = $val($row, $idx['pic']) ?? $finance->pic;
+                $finance->payment_method = $val($row, $idx['metode']) ?? $finance->payment_method;
+                $finance->notes          = $val($row, $idx['ket']) ?? $finance->notes;
+                
+                $parsedUrl = $parseUrl($val($row, $idx['nota']));
+                $finance->receipt_url    = $parsedUrl ? $parsedUrl : $finance->receipt_url;
+
+                $finance->save();
             }
         });
 

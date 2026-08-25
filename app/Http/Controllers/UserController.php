@@ -13,14 +13,13 @@ class UserController extends Controller
                 $q->where('name', 'like', "%{$search}%")
                   ->orWhere('email', 'like', "%{$search}%")
             )
-            ->latest();
+            ->orderBy('name', 'asc'); // Urutkan sesuai alfabet agar rapi
             
-        // FIX: Bypass pagination jika diminta oleh Modal Absensi
-        if ($request->boolean('all')) {
-            return response()->json(['data' => $query->get()]);
-        }
-
-        return response()->json($query->paginate(15));
+        // OPTIMASI: Master Data User kini mengembalikan seluruh data (tanpa paginasi 15 baris)
+        // karena jumlah pengurus relatif kecil (30-100) dan butuh akses cepat.
+        return response()->json([
+            'data' => $query->get()
+        ]);
     }
 
     public function update(Request $request, User $user)
