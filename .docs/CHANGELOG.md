@@ -232,3 +232,7 @@ Sebagai penutup sesi dan peresmian rilis versi 1.0.0, simpan pencapaianmu ke dal
 - Mengimplementasikan kalkulasi dinamis untuk mendeteksi *Personal Dues Delinquency* (Tunggakan Kas Bulanan) berdasarkan *Auth Session*.
 - Mengimplementasikan kalkulasi *Agenda Participation Rate* untuk mengekstrak rasio persentase tingkat kehadiran riwayat agenda terakhir yang diselesaikan.
 - Mengisolasi arsitektur komputasi *Time-Series Chart* menjadi format multidimensi untuk mengak
+## [2026-08-25]
+### Changed
+- Merevisi algoritma ekstraksi `MonthlyDueController` dan *Personal Dues Delinquency* pada `DashboardService` untuk mem- *filter* eksklusi (*Query Builder Exclusion*) entitas dengan *role* `advisor`. Hal ini mengamankan visibilitas hierarki dan mencegah penagihan iuran fiktif kepada Pembina Organisasi.
+- Merombak arsitektur balasan metrik *Agenda Participation* dari *Single Point Indicator* menjadi

@@ -23,6 +23,7 @@ class DashboardTest extends TestCase
     {
         parent::setUp();
         Role::firstOrCreate(['name' => 'member', 'guard_name' => 'web']);
+        Role::firstOrCreate(['name' => 'advisor', 'guard_name' => 'web']);
         $this->user = User::factory()->create();
         $this->user->assignRole('member');
     }
@@ -76,7 +77,9 @@ class DashboardTest extends TestCase
             'message',
             'data' => [
                 'personal_dues' => ['unpaid_months'],
-                'agenda_participation' => ['last_agenda_title', 'rate'],
+                'agenda_participation' => [
+                    '*' => ['title', 'rate']
+                ],
                 'financial_health' => [
                     'total_balance',
                     'chart_data' => ['Kas Umum'],
@@ -85,8 +88,20 @@ class DashboardTest extends TestCase
         ]);
 
         $this->assertEquals(700.00, $response->json('data.financial_health.total_balance'));
-        $this->assertEquals('Rapat Perdana', $response->json('data.agenda_participation.last_agenda_title'));
-        $this->assertEquals(100, $response->json('data.agenda_participation.rate'));
+        $this->assertEquals('Rapat Perdana', $response->json('data.agenda_participation.0.title'));
+        $this->assertEquals(100, $response->json('data.agenda_participation.0.rate'));
+    }
+
+    public function test_advisor_is_exempt_from_personal_dues(): void
+    {
+        $advisor = User::factory()->create();
+        $advisor->assignRole('advisor');
+
+        $response = $this->actingAs($advisor, 'sanctum')
+            ->getJson('/api/dashboard/statistics');
+
+        $response->assertStatus(200);
+        $this->assertEquals(0, $response->json('data.personal_dues.unpaid_months'));
     }
 
     public function test_upcoming_agenda_only_shows_future_dates(): void

@@ -18,48 +18,49 @@ class DashboardService
 
         // 1. HITUNG TUNGGAKAN KAS PENGURUS (Personal)
         $unpaidMonths = 0;
-        $currentMonth = $now->month;
-        $currentYear  = $now->year;
         
-        $monthsPassed = 0;
-        if ($currentMonth >= 10) {
-            $monthsPassed = $currentMonth - 10 + 1; // Okt, Nov, Des
-        } else {
-            $monthsPassed = (12 - 10 + 1) + $currentMonth; // Okt - Des + Jan - Current
-        }
-        
-        // Cek berapa bulan yang sudah dibayar oleh user ini
-        $paidMonthsCount = 0;
-        if ($user) {
+        // PENGECUALIAN: Pembina (Advisor) tidak ditagih kas
+        if ($user && !$user->hasRole('advisor')) {
+            $startMonth   = 10;
+            $currentMonth = $now->month;
+            $currentYear  = $now->year;
+            
+            if ($currentMonth >= 10) {
+                $monthsPassed = $currentMonth - 10 + 1; // Okt, Nov, Des
+            } else {
+                $monthsPassed = (12 - 10 + 1) + $currentMonth; // Okt - Des + Jan - Current
+            }
+            
             $paidMonthsCount = MonthlyDue::where('user_id', $user->id)
                 ->where(function ($query) use ($currentYear) {
                     $query->where('year', $currentYear)
                           ->orWhere('year', $currentYear - 1);
                 })->count();
+
+            if ($monthsPassed > 0) {
+                $maxObligation = min($monthsPassed, 9);
+                $unpaidMonths  = max(0, $maxObligation - $paidMonthsCount);
+            }
         }
 
-        // Jika bulan yang lewat lebih banyak dari yang dibayar, maka ada tunggakan
-        // Batasi maksimal tunggakan adalah 9 bulan (Oktober - Juni)
-        if ($monthsPassed > 0) {
-            $maxObligation = min($monthsPassed, 9);
-            $unpaidMonths  = max(0, $maxObligation - $paidMonthsCount);
-        }
-
-        // 2. HITUNG PARTISIPASI AGENDA TERAKHIR
-        $lastAgenda = Agenda::with('attendances')
-            ->whereHas('attendances') // Hanya cari agenda yang sudah diabsen
-            ->where('start_date', '<=', $now)
+        // 2. HITUNG PARTISIPASI AGENDA (Daftar 5 Agenda Terakhir - Gamifikasi)
+        $lastAgendas = Agenda::with('attendances')
+            ->whereHas('attendances') // Hanya agenda yang sudah ada absennya
+            ->where('start_date', '<=', $now) // Hanya agenda masa lalu/hari ini
             ->orderBy('start_date', 'desc')
-            ->first();
+            ->take(5)
+            ->get();
 
-        $participationRate = 0;
-        $lastAgendaTitle   = '-';
-        if ($lastAgenda && $lastAgenda->attendances->count() > 0) {
-            $lastAgendaTitle   = $lastAgenda->title;
-            $totalParticipants = $lastAgenda->attendances->count();
-            $presentCount      = $lastAgenda->attendances->whereIn('status', ['present', 'permit'])->count(); // Hadir dan Izin dihitung positif
-            $participationRate = (int) round(($presentCount / $totalParticipants) * 100);
-        }
+        $participationList = $lastAgendas->map(function ($agenda) {
+            $totalParticipants = $agenda->attendances->count();
+            $presentCount      = $agenda->attendances->whereIn('status', ['present', 'permit'])->count(); // Hadir dan Izin dihitung positif
+            $rate              = $totalParticipants > 0 ? (int) round(($presentCount / $totalParticipants) * 100) : 0;
+            
+            return [
+                'title' => $agenda->title,
+                'rate'  => $rate,
+            ];
+        });
 
         // 3. STATISTIK KAS UMUM
         $totalIncome  = (float) Finance::where('type', 'income')->whereNull('event_id')->sum('amount');
@@ -70,10 +71,7 @@ class DashboardService
             'personal_dues' => [
                 'unpaid_months' => $unpaidMonths,
             ],
-            'agenda_participation' => [
-                'last_agenda_title' => $lastAgendaTitle,
-                'rate'              => $participationRate,
-            ],
+            'agenda_participation' => $participationList, // Mengirimkan Array Daftar Agenda
             'financial_health' => [
                 'total_balance' => $totalBalance,
                 'chart_data'    => $this->getChartData($now),

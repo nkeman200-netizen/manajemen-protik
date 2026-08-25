@@ -13,7 +13,11 @@ class MonthlyDueController extends Controller
     public function index(): JsonResponse
     {
         // Mengembalikan struktur untuk Heatmap Frontend
-        $users = User::with('roles')->get();
+        // PENGECUALIAN: Sembunyikan role 'advisor' dari tabel tagihan kas
+        $users = User::with('roles')
+            ->whereDoesntHave('roles', fn($q) => $q->where('name', 'advisor'))
+            ->get();
+            
         $dues = MonthlyDue::all();
         
         return response()->json([
