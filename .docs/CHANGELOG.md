@@ -226,3 +226,9 @@ Sebagai penutup sesi dan peresmian rilis versi 1.0.0, simpan pencapaianmu ke dal
 ### Changed
 - Menggugurkan strategi *Dummy Data Seeding* untuk beralih ke skema *Production-Ready Seeding*. Mengintegrasikan *Single Source of Truth* dari dokumen STO PROTIK 2026/2027 (31 Entitas Pengurus + 8 Divisi Resmi).
 - Merefaktorisasi `DatabaseSeeder.php` untuk mengeksekusi inisialisasi relasional terpusat, mencakup pemetaan Spatie Roles (*Admin, Member, Advisor*), properti demografi anggota, dan injeksi *Event* statis "Makrab Protic 2026" beserta data transaksi historisnya sebagai referensi pengujian modul *Cloud Sync*.
+## [2026-08-25]
+### Changed
+- Merefaktorisasi `DashboardService.php` secara menyeluruh untuk membangun ulang mesin agregasi Dasbor tingkat eksekutif.
+- Mengimplementasikan kalkulasi dinamis untuk mendeteksi *Personal Dues Delinquency* (Tunggakan Kas Bulanan) berdasarkan *Auth Session*.
+- Mengimplementasikan kalkulasi *Agenda Participation Rate* untuk mengekstrak rasio persentase tingkat kehadiran riwayat agenda terakhir yang diselesaikan.
+- Mengisolasi arsitektur komputasi *Time-Series Chart* menjadi format multidimensi untuk mengak

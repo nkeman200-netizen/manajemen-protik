@@ -8,15 +8,19 @@ class UserController extends Controller
 {
     public function index(Request $request)
     {
-        $users = User::with(['roles', 'division'])
+        $query = User::with(['roles', 'division'])
             ->when($request->search, fn ($q, $search) => 
                 $q->where('name', 'like', "%{$search}%")
                   ->orWhere('email', 'like', "%{$search}%")
             )
-            ->latest()
-            ->paginate(15);
+            ->latest();
             
-        return response()->json($users);
+        // FIX: Bypass pagination jika diminta oleh Modal Absensi
+        if ($request->boolean('all')) {
+            return response()->json(['data' => $query->get()]);
+        }
+
+        return response()->json($query->paginate(15));
     }
 
     public function update(Request $request, User $user)
