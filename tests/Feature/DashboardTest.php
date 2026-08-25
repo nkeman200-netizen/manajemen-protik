@@ -104,18 +104,18 @@ class DashboardTest extends TestCase
         $this->assertEquals(0, $response->json('data.personal_dues.unpaid_months'));
     }
 
-    public function test_upcoming_agenda_only_shows_future_dates(): void
+    public function test_upcoming_agenda_returns_all_agendas_chronologically(): void
     {
         // Arrange
         $now = Carbon::now();
 
-        // Past Agendas
+        // Past Agenda
         Agenda::create([
             'title'      => 'Past Agenda 1',
             'start_date' => $now->copy()->subDays(5)->toDateTimeString(),
         ]);
 
-        // Future Agendas (7 agendas to test limit 5 and sorting)
+        // Future Agendas
         for ($i = 1; $i <= 7; $i++) {
             Agenda::create([
                 'title'      => "Future Agenda $i",
@@ -129,10 +129,10 @@ class DashboardTest extends TestCase
 
         // Assert
         $response->assertStatus(200);
-        $response->assertJsonCount(5, 'data.upcoming_meetings');
+        $response->assertJsonCount(8, 'data.upcoming_meetings');
 
         $meetings = $response->json('data.upcoming_meetings');
-        $this->assertEquals('Future Agenda 1', $meetings[0]['title']);
-        $this->assertEquals('Future Agenda 5', $meetings[4]['title']);
+        $this->assertEquals('Past Agenda 1', $meetings[0]['title']);
+        $this->assertEquals('Future Agenda 7', $meetings[7]['title']);
     }
 }

@@ -236,3 +236,8 @@ Sebagai penutup sesi dan peresmian rilis versi 1.0.0, simpan pencapaianmu ke dal
 ### Changed
 - Merevisi algoritma ekstraksi `MonthlyDueController` dan *Personal Dues Delinquency* pada `DashboardService` untuk mem- *filter* eksklusi (*Query Builder Exclusion*) entitas dengan *role* `advisor`. Hal ini mengamankan visibilitas hierarki dan mencegah penagihan iuran fiktif kepada Pembina Organisasi.
 - Merombak arsitektur balasan metrik *Agenda Participation* dari *Single Point Indicator* menjadi
+## [2026-08-25]
+### Changed
+- Merefaktorisasi seluruh operasi manipulasi dan ekstraksi CSV *Cloud Sync* (Agenda, Kas, Dokumen, Keuangan) dari *Controllers* ke dalam lapisan abstraksi `SyncService`. Implementasi ini mengeksekusi prinsip *Separation of Concerns* (SoC) dan memusatkan kapabilitas *Error Handling*.
+- Mengganti arsitektur agregasi *Agenda Participation Rate* pada `DashboardService` dari *Collection iteration* (`->count()`) menuju perhitungan *Database-Level* (`withCount()`). Pendekatan ini mengeleminasi anomali *N+1 Query* dan mencegah *Out of Memory* (OOM) pada komputasi skala besar.
+- Mengimplementasikan `LazyCollection` via metode `->cursor()` pada agregator ekspor `FinanceController` untuk mengoptimalkan *throughput* serialisasi JSON data masif tanpa membebani RAM server.

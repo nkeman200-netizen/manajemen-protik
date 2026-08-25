@@ -44,16 +44,20 @@ class DashboardService
         }
 
         // 2. HITUNG PARTISIPASI AGENDA (Daftar 5 Agenda Terakhir - Gamifikasi)
-        $lastAgendas = Agenda::with('attendances')
-            ->whereHas('attendances') // Hanya agenda yang sudah ada absennya
-            ->where('start_date', '<=', $now) // Hanya agenda masa lalu/hari ini
+        // OPTIMASI: Menggunakan agregasi SQL (withCount) untuk menghindari Out of Memory (OOM)
+        $lastAgendas = Agenda::withCount([
+                'attendances',
+                'attendances as present_count' => fn($q) => $q->whereIn('status', ['present', 'permit'])
+            ])
+            ->whereHas('attendances')
+            ->where('start_date', '<=', $now)
             ->orderBy('start_date', 'desc')
             ->take(5)
             ->get();
 
         $participationList = $lastAgendas->map(function ($agenda) {
-            $totalParticipants = $agenda->attendances->count();
-            $presentCount      = $agenda->attendances->whereIn('status', ['present', 'permit'])->count(); // Hadir dan Izin dihitung positif
+            $totalParticipants = $agenda->attendances_count;
+            $presentCount      = $agenda->present_count;
             $rate              = $totalParticipants > 0 ? (int) round(($presentCount / $totalParticipants) * 100) : 0;
             
             return [
@@ -126,15 +130,11 @@ class DashboardService
 
     public function getUpcomingAgenda(): array
     {
-        $today = Carbon::now()->startOfDay();
-
-        $upcomingAgendas = Agenda::where('start_date', '>=', $today)
-            ->orderBy('start_date', 'asc')
-            ->limit(5)
-            ->get();
+        // Ambil SEMUA agenda agar Kalender Frontend bisa menggeser bulan ke masa lalu dan masa depan
+        $agendas = Agenda::orderBy('start_date', 'asc')->get();
 
         return [
-            'upcoming_meetings' => $upcomingAgendas,
+            'upcoming_meetings' => $agendas, // Tetap menggunakan key ini agar kompatibel dengan state Frontend
         ];
     }
 }

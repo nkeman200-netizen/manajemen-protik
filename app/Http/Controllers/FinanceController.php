@@ -6,16 +6,16 @@ use App\Http\Resources\FinanceResource;
 use App\Models\Event;
 use App\Models\Finance;
 use App\Services\FinanceService;
-use Carbon\Carbon;
+use App\Services\SyncService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
-use Illuminate\Support\Facades\DB;
 
 class FinanceController extends Controller
 {
     public function __construct(
         private readonly FinanceService $financeService,
+        private readonly SyncService $syncService,
     ) {}
 
     public function index(Request $request)
@@ -39,7 +39,8 @@ class FinanceController extends Controller
 
         // BYPASS OPTIMASI EXPORT
         if ($request->boolean('export')) {
-            $finances = $query->get();
+            // OPTIMASI: Menggunakan cursor() (Lazy Collection) alih-alih get() agar RAM tidak penuh
+            $finances = $query->cursor();
             return response()->json([
                 'message' => 'Export payload ready',
                 'data' => FinanceResource::collection($finances)
@@ -137,105 +138,8 @@ class FinanceController extends Controller
             if (!$url) return response()->json(['message' => 'URL Sinkronisasi Keuangan BPH Pusat belum dikonfigurasi.'], 500);
         }
 
-        $separator = str_contains($url, '?') ? '&' : '?';
-        $freshUrl = $url . $separator . 'cb=' . time();
-
         try {
-            $context = stream_context_create(['http' => ['header' => "Cache-Control: no-cache\r\n"]]);
-            $csvData = file_get_contents($freshUrl, false, $context);
-            $rows = array_map('str_getcsv', explode("\n", $csvData));
-            
-            $header = [];
-            $dataStartIndex = 0;
-            foreach ($rows as $index => $row) {
-                $cleanRow = array_map('trim', $row);
-                $rowString = strtolower(implode(' | ', $cleanRow));
-                if (str_contains($rowString, 'tipe') && str_contains($rowString, 'rincian')) {
-                    $header = $cleanRow;
-                    $dataStartIndex = $index + 1;
-                    break;
-                }
-            }
-
-            if (empty($header)) return response()->json(['message' => 'Format Header tidak ditemukan.'], 400);
-
-            $idx = [
-                'tgl'      => array_search('Tanggal (YYYY-MM-DD)', $header) ?: array_search('Tanggal', $header),
-                'tipe'     => array_search('Tipe (Pemasukan/Pengeluaran)', $header) ?: array_search('Tipe', $header),
-                'rincian'  => array_search('Rincian', $header),
-                'kategori' => array_search('Kategori', $header),
-                'vol'      => array_search('Volume', $header),
-                'satuan'   => array_search('Satuan', $header),
-                'harga'    => array_search('Harga Satuan', $header),
-                'sumber'   => array_search('Sumber Dana', $header),
-                'pic'      => array_search('Penanggungjawab', $header),
-                'metode'   => array_search('Metode', $header),
-                'nota'     => array_search('Link Nota', $header),
-                'ket'      => array_search('Keterangan', $header),
-            ];
-
-            $parseDate = function ($dateStr) {
-                try {
-                    return Carbon::parse(str_replace('/', '-', trim($dateStr)))->format('Y-m-d');
-                } catch (\Exception $e) {
-                    return null;
-                }
-            };
-            $parseUrl = function ($urlStr) {
-                return filter_var(trim($urlStr), FILTER_VALIDATE_URL) ? trim($urlStr) : null;
-            };
-            $parsePrice = function ($priceStr) {
-                return (float) preg_replace('/[^0-9]/', '', explode(',', trim($priceStr))[0] ?? '0');
-            };
-            $val = function($row, $index) {
-                if ($index === false || !isset($row[$index])) return null;
-                $v = trim($row[$index]);
-                return (strtolower($v) === 'nan' || $v === '') ? null : $v;
-            };
-
-            // FIX UTAMA: Menyuntikkan $eventId ke dalam use(...)
-            DB::transaction(function () use ($rows, $dataStartIndex, $idx, $parseDate, $parseUrl, $parsePrice, $val, $eventId) {
-                if ($eventId) {
-                    Finance::where('event_id', $eventId)->delete();
-                } else {
-                    Finance::whereNull('event_id')->delete();
-                }
-
-                for ($i = $dataStartIndex; $i < count($rows); $i++) {
-                    $row = $rows[$i];
-                    if (empty($row) || count($row) < 3) continue;
-
-                    $rincian = $val($row, $idx['rincian']);
-                    $tipeRaw = $val($row, $idx['tipe']);
-                    if (!$rincian || !$tipeRaw) continue;
-
-                    $type = (stripos($tipeRaw, 'masuk') !== false || strtolower($tipeRaw) === 'income') ? 'income' : 'expense';
-                    $qty = (float) ($val($row, $idx['vol']) ?? 1);
-                    $price = $parsePrice($val($row, $idx['harga']));
-
-                    Finance::create([
-                        'user_id'        => auth()->id() ?? 1,
-                        'event_id'       => $eventId ? (int)$eventId : null,
-                        'type'           => $type,
-                        'category'       => $val($row, $idx['kategori']),
-                        'title'          => $rincian,
-                        'description'    => $rincian,
-                        'qty'            => $qty,
-                        'unit'           => $val($row, $idx['satuan']),
-                        'unit_price'     => $price,
-                        'amount'         => $qty * $price,
-                        'funding_source' => $val($row, $idx['sumber']),
-                        'pic'            => $val($row, $idx['pic']),
-                        'payment_method' => $val($row, $idx['metode']),
-                        'receipt_url'    => $parseUrl($val($row, $idx['nota'])),
-                        'notes'          => $val($row, $idx['ket']),
-                        'date'           => $parseDate($val($row, $idx['tgl'])) ?? now()->toDateString(),
-                    ]);
-                }
-            });
-
-            return response()->json(['message' => "Sinkronisasi berhasil."]);
-
+            return response()->json($this->syncService->syncFinances($eventId, $url, auth()->id() ?? 1));
         } catch (\Exception $e) {
             return response()->json(['message' => 'Gagal menyinkronisasi data.', 'error' => $e->getMessage()], 500);
         }
