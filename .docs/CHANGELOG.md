@@ -248,3 +248,6 @@ Sebagai penutup sesi dan peresmian rilis versi 1.0.0, simpan pencapaianmu ke dal
 ## [2026-08-25]
 ### Fixed
 - Menyelesaikan anomali *Timezone Shift* (+7 Jam offset) yang mendistorsi validitas tampilan waktu kalender dan agenda di *Frontend*. Melakukan standardisasi variabel `'timezone'` pada `config/app.php` dari `UTC` menjadi `Asia/Jakarta` guna menyelaraskan komputasi waktu *Backend* (MySQL & Carbon) dengan interpretasi *Client-Side*.
+## [2026-08-25]
+### Changed
+- Merefaktorisasi `SyncService.php` dengan merestorasi algoritma *Intelligent Column Hunter* (`findColIndex`) setelah melakukan evaluasi *Trade-off Big-O Notation* (memori vs fleksibilitas). Matriks pencarian kini menyertakan kombinasi *Primary Exact Match* (seperti `tanggal (yyyy-mm-dd)`, `pj/divisi`) dari *Spreadsheet* produksi dan *Secondary Fallback Match* (seperti `pic`, `tgl`). Arsitektur ini mengeleminasi kerapuhan sistem terhadap modifikasi *header* Excel sembari mempertahankan kapabilitas *Smart Upsert*.
