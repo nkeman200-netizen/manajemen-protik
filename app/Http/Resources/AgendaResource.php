@@ -1,5 +1,6 @@
 <?php
 namespace App\Http\Resources;
+
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -16,6 +17,7 @@ class AgendaResource extends JsonResource {
             'status'      => $this->status,
             'minutes_url' => $this->minutes_url,
             'attendances' => $this->whenLoaded('attendances'),
+            'targets'     => $this->whenLoaded('targets'),
         ];
     }
 }

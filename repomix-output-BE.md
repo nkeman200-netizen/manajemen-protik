@@ -42,6 +42,8 @@ The content is organized as follows:
 app/
   Http/
     Controllers/
+      AgendaAttendanceController.php
+      AgendaController.php
       AuditTrailController.php
       AuthController.php
       Controller.php
@@ -51,14 +53,13 @@ app/
       EventCommitteeController.php
       EventController.php
       FinanceController.php
-      MeetingAttendanceController.php
-      MeetingController.php
       MonthlyDueController.php
       ProfileController.php
       RoleController.php
       UserController.php
       WarningController.php
     Resources/
+      AgendaResource.php
       DocumentResource.php
       EventResource.php
       FinanceResource.php
@@ -67,14 +68,15 @@ app/
       UserResource.php
       WarningResource.php
   Models/
+    Agenda.php
+    AgendaAttendance.php
+    AgendaTarget.php
     AuditTrail.php
     Division.php
     Document.php
     Event.php
     EventCommittee.php
     Finance.php
-    Meeting.php
-    MeetingAttendance.php
     MonthlyDue.php
     User.php
     Warning.php
@@ -135,6 +137,9 @@ database/
     2026_08_23_015100_add_enterprise_columns_to_finances_table.php
     2026_08_23_021800_create_monthly_dues_table.php
     2026_08_23_030600_add_sync_urls_to_events_table.php
+    2026_08_23_183100_refactor_meetings_to_agendas_system.php
+    2026_08_23_211700_add_is_coordinator_to_users_table.php
+    2026_08_23_211701_create_agenda_targets_table.php
   seeders/
     DatabaseSeeder.php
     ProticUserSeeder.php
@@ -179,13 +184,13 @@ storage/
     .gitignore
 tests/
   Feature/
+    AgendaAttendanceTest.php
+    AgendaTest.php
     AuditTrailTest.php
     DashboardTest.php
     DocumentTest.php
     ExampleTest.php
     FinanceTest.php
-    MeetingAttendanceTest.php
-    MeetingTest.php
     MonthlyDueTest.php
     ProfileTest.php
     SecurityTest.php
@@ -208,6 +213,201 @@ vite.config.js
 ````
 
 # Files
+
+## File: app/Http/Controllers/AgendaAttendanceController.php
+````php
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\AgendaAttendance;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+
+class AgendaAttendanceController extends Controller
+{
+    public function index(Request $request): JsonResponse
+    {
+        $request->validate([
+            'agenda_id' => 'required|exists:agendas,id'
+        ]);
+
+        $attendances = AgendaAttendance::with('user')
+            ->where('agenda_id', $request->agenda_id)
+            ->get();
+
+        return response()->json($attendances);
+    }
+
+    public function bulkSync(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'agenda_id'               => 'required|exists:agendas,id',
+            'attendances'             => 'required|array',
+            'attendances.*.user_id'   => 'required|exists:users,id',
+            'attendances.*.status'    => 'required|in:present,permit,sick,absent',
+            'attendances.*.proof_url' => 'nullable|url',
+        ]);
+
+        $agendaId = $validated['agenda_id'];
+
+        DB::transaction(function () use ($agendaId, $validated) {
+            // Hapus absensi lama agar bisa ditimpa (Wipe & Reload)
+            AgendaAttendance::where('agenda_id', $agendaId)->delete();
+
+            // Masukkan absensi baru
+            foreach ($validated['attendances'] as $att) {
+                AgendaAttendance::create([
+                    'agenda_id' => $agendaId,
+                    'user_id'   => $att['user_id'],
+                    'status'    => $att['status'],
+                    'proof_url' => $att['proof_url'] ?? null,
+                ]);
+            }
+        });
+
+        return response()->json(['message' => 'Data absensi berhasil disimpan.']);
+    }
+}
+````
+
+## File: app/Models/AgendaTarget.php
+````php
+<?php
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+
+class AgendaTarget extends Model {
+    use HasFactory;
+
+    protected $fillable = ['agenda_id', 'target_type', 'target_value'];
+
+    public function agenda(): BelongsTo {
+        return $this->belongsTo(Agenda::class);
+    }
+}
+````
+
+## File: database/migrations/2026_08_23_211700_add_is_coordinator_to_users_table.php
+````php
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration {
+    public function up(): void {
+        Schema::table('users', function (Blueprint $table) {
+            $table->boolean('is_coordinator')->default(false)->after('division_id');
+        });
+    }
+
+    public function down(): void {
+        Schema::table('users', function (Blueprint $table) {
+            $table->dropColumn('is_coordinator');
+        });
+    }
+};
+````
+
+## File: database/migrations/2026_08_23_211701_create_agenda_targets_table.php
+````php
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration {
+    public function up(): void {
+        Schema::create('agenda_targets', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('agenda_id')->constrained('agendas')->cascadeOnDelete();
+            
+            // 'all', 'bph', 'coordinator', 'division', 'position', 'user'
+            $table->string('target_type'); 
+            
+            // Berisi string, division_id, atau user_id (untuk target lepas)
+            $table->string('target_value')->nullable();
+            $table->timestamps();
+        });
+    }
+
+    public function down(): void {
+        Schema::dropIfExists('agenda_targets');
+    }
+};
+````
+
+## File: tests/Feature/AgendaAttendanceTest.php
+````php
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\Agenda;
+use App\Models\AgendaAttendance;
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Spatie\Permission\Models\Role;
+use Tests\TestCase;
+
+class AgendaAttendanceTest extends TestCase
+{
+    use RefreshDatabase;
+
+    protected User $user;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        Role::firstOrCreate(['name' => 'member', 'guard_name' => 'web']);
+        $this->user = User::factory()->create();
+        $this->user->assignRole('member');
+    }
+
+    public function test_can_fetch_and_bulk_sync_agenda_attendances(): void
+    {
+        $agenda = Agenda::create([
+            'title'      => 'Rapat Pleno',
+            'start_date' => now(),
+        ]);
+
+        $attendee = User::factory()->create();
+
+        $payload = [
+            'agenda_id'   => $agenda->id,
+            'attendances' => [
+                [
+                    'user_id' => $attendee->id,
+                    'status'  => 'present',
+                ],
+            ],
+        ];
+
+        $postResponse = $this->actingAs($this->user, 'sanctum')
+            ->postJson('/api/agenda-attendances/bulk', $payload);
+
+        $postResponse->assertStatus(200);
+        $this->assertDatabaseHas('agenda_attendances', [
+            'agenda_id' => $agenda->id,
+            'user_id'   => $attendee->id,
+            'status'    => 'present',
+        ]);
+
+        $getResponse = $this->actingAs($this->user, 'sanctum')
+            ->getJson('/api/agenda-attendances?agenda_id=' . $agenda->id);
+
+        $getResponse->assertStatus(200);
+        $getResponse->assertJsonCount(1);
+    }
+}
+````
 
 ## File: .docs/MASTER_RULES.md
 ````markdown
@@ -614,6 +814,33 @@ class RoleController extends Controller
 }
 ````
 
+## File: app/Http/Resources/AgendaResource.php
+````php
+<?php
+namespace App\Http\Resources;
+
+use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\JsonResource;
+
+class AgendaResource extends JsonResource {
+    public function toArray(Request $request): array {
+        return [
+            'id'          => $this->id,
+            'event_id'    => $this->event_id,
+            'title'       => $this->title,
+            'start_date'  => $this->start_date?->format('Y-m-d H:i:s'),
+            'end_date'    => $this->end_date?->format('Y-m-d H:i:s'),
+            'location'    => $this->location,
+            'pic'         => $this->pic,
+            'status'      => $this->status,
+            'minutes_url' => $this->minutes_url,
+            'attendances' => $this->whenLoaded('attendances'),
+            'targets'     => $this->whenLoaded('targets'),
+        ];
+    }
+}
+````
+
 ## File: app/Http/Resources/EventResource.php
 ````php
 <?php
@@ -688,17 +915,18 @@ class UserResource extends JsonResource
     public function toArray(Request $request): array
     {
         return [
-            'id'       => $this->id,
-            'name'     => $this->name,
-            'email'    => $this->email,
-            'nim'      => $this->nim,
-            'phone'    => $this->phone,
-            'prodi'    => $this->prodi,
-            'angkatan' => $this->angkatan,
-            'address'  => $this->address,
-            'status'   => $this->status,
-            'division' => $this->whenLoaded('division'),
-            'roles'    => $this->whenLoaded('roles'),
+            'id'             => $this->id,
+            'name'           => $this->name,
+            'email'          => $this->email,
+            'nim'            => $this->nim,
+            'phone'          => $this->phone,
+            'prodi'          => $this->prodi,
+            'angkatan'       => $this->angkatan,
+            'address'        => $this->address,
+            'status'         => $this->status,
+            'is_coordinator' => (bool) $this->is_coordinator,
+            'division'       => $this->whenLoaded('division'),
+            'roles'          => $this->whenLoaded('roles'),
         ];
     }
 }
@@ -729,6 +957,50 @@ class WarningResource extends JsonResource
             'admin'      => $this->whenLoaded('admin'),
         ];
     }
+}
+````
+
+## File: app/Models/Agenda.php
+````php
+<?php
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+
+class Agenda extends Model {
+    use HasFactory;
+
+    protected $fillable = ['event_id', 'title', 'start_date', 'end_date', 'location', 'pic', 'status', 'minutes_url'];
+    protected $casts = ['start_date' => 'datetime', 'end_date' => 'datetime'];
+
+    public function event(): BelongsTo { return $this->belongsTo(Event::class); }
+    public function attendances(): HasMany { return $this->hasMany(AgendaAttendance::class); }
+
+    public function targets(): HasMany {
+        return $this->hasMany(AgendaTarget::class);
+    }
+}
+````
+
+## File: app/Models/AgendaAttendance.php
+````php
+<?php
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+
+class AgendaAttendance extends Model {
+    use HasFactory;
+
+    protected $fillable = ['agenda_id', 'user_id', 'status', 'proof_url'];
+    
+    public function agenda(): BelongsTo { return $this->belongsTo(Agenda::class); }
+    public function user(): BelongsTo { return $this->belongsTo(User::class); }
 }
 ````
 
@@ -790,34 +1062,6 @@ class EventCommittee extends Model
 
     public function user(): BelongsTo
     {
-        return $this->belongsTo(User::class);
-    }
-}
-````
-
-## File: app/Models/MeetingAttendance.php
-````php
-<?php
-namespace App\Models;
-
-use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
-
-class MeetingAttendance extends Model {
-    use HasFactory;
-
-    protected $fillable = ['meeting_id', 'user_id', 'status', 'proof_url'];
-
-    protected $casts = [
-        'status' => 'string',
-    ];
-
-    public function meeting(): BelongsTo {
-        return $this->belongsTo(Meeting::class);
-    }
-
-    public function user(): BelongsTo {
         return $this->belongsTo(User::class);
     }
 }
@@ -917,92 +1161,6 @@ class AuditObserver
     public function deleted($model)
     {
         $this->log($model, 'deleted', $model->getOriginal(), null);
-    }
-}
-````
-
-## File: app/Services/DashboardService.php
-````php
-<?php
-
-namespace App\Services;
-
-use App\Models\Document;
-use App\Models\Event;
-use App\Models\Finance;
-use App\Models\Meeting;
-use Carbon\Carbon;
-
-class DashboardService
-{
-    public function getStatistics(): array
-    {
-        $now   = Carbon::now();
-        $today = $now->toDateString();
-
-        $totalIncome  = (float) Finance::where('type', 'income')->sum('amount');
-        $totalExpense = (float) Finance::where('type', 'expense')->sum('amount');
-        $totalBalance = $totalIncome - $totalExpense;
-
-        $incomeThisMonth = (float) Finance::where('type', 'income')
-            ->whereMonth('date', $now->month)
-            ->whereYear('date', $now->year)
-            ->sum('amount');
-
-        $expenseThisMonth = (float) Finance::where('type', 'expense')
-            ->whereMonth('date', $now->month)
-            ->whereYear('date', $now->year)
-            ->sum('amount');
-
-        $activeEventsCount = Event::where('start_date', '<=', $today)
-            ->where(function ($query) use ($today) {
-                $query->where('end_date', '>=', $today)
-                      ->orWhereNull('end_date');
-            })
-            ->count();
-
-        $documentsIssuedThisMonth = Document::whereMonth('created_at', $now->month)
-            ->whereYear('created_at', $now->year)
-            ->count();
-
-        $meetingsThisMonth = Meeting::whereMonth('date', $now->month)
-            ->whereYear('date', $now->year)
-            ->count();
-
-        return [
-            'financial_health' => [
-                'total_balance'      => $totalBalance,
-                'income_this_month'  => $incomeThisMonth,
-                'expense_this_month' => $expenseThisMonth,
-            ],
-            'event_performance' => [
-                'active_events_count' => $activeEventsCount,
-            ],
-            'organizational_activity' => [
-                'documents_issued_this_month' => $documentsIssuedThisMonth,
-                'meetings_this_month'         => $meetingsThisMonth,
-            ],
-        ];
-    }
-
-    public function getUpcomingAgenda(): array
-    {
-        $today = Carbon::now()->startOfDay();
-
-        $upcomingEvents = Event::where('start_date', '>=', $today->toDateString())
-            ->orderBy('start_date', 'asc')
-            ->limit(5)
-            ->get();
-
-        $upcomingMeetings = Meeting::where('date', '>=', $today)
-            ->orderBy('date', 'asc')
-            ->limit(5)
-            ->get();
-
-        return [
-            'upcoming_events'   => $upcomingEvents,
-            'upcoming_meetings' => $upcomingMeetings,
-        ];
     }
 }
 ````
@@ -3607,6 +3765,52 @@ return new class extends Migration {
 };
 ````
 
+## File: database/migrations/2026_08_23_183100_refactor_meetings_to_agendas_system.php
+````php
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration {
+    public function up(): void {
+        // 1. Drop tabel lama dengan urutan yang benar (child -> parent)
+        Schema::dropIfExists('meeting_attendances');
+        Schema::dropIfExists('meetings');
+
+        // 2. Buat tabel Agendas (Mencakup Rapat, Gladi, Acara, dll)
+        Schema::create('agendas', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('event_id')->nullable()->constrained('events')->nullOnDelete();
+            $table->string('title'); // Dari "Nama Agenda"
+            $table->dateTime('start_date');
+            $table->dateTime('end_date')->nullable();
+            $table->string('location')->nullable(); // Dari "Tempat"
+            $table->string('pic')->nullable(); // Dari "PJ/Divisi"
+            $table->string('status')->nullable(); // Dari "Status"
+            $table->string('minutes_url')->nullable(); // Dari "Link Notulensi"
+            $table->timestamps();
+        });
+
+        // 3. Buat ulang tabel absensi untuk agenda yang membutuhkannya
+        Schema::create('agenda_attendances', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('agenda_id')->constrained('agendas')->cascadeOnDelete();
+            $table->foreignId('user_id')->constrained('users')->onDelete('restrict');
+            $table->enum('status', ['present', 'permit', 'sick', 'absent']);
+            $table->string('proof_url')->nullable();
+            $table->timestamps();
+        });
+    }
+
+    public function down(): void {
+        Schema::dropIfExists('agenda_attendances');
+        Schema::dropIfExists('agendas');
+    }
+};
+````
+
 ## File: database/seeders/ProticUserSeeder.php
 ````php
 <?php
@@ -4095,6 +4299,95 @@ services.json
 !.gitignore
 ````
 
+## File: tests/Feature/AgendaTest.php
+````php
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\Agenda;
+use App\Models\Event;
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Spatie\Permission\Models\Role;
+use Tests\TestCase;
+
+class AgendaTest extends TestCase
+{
+    use RefreshDatabase;
+
+    protected User $user;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        Role::firstOrCreate(['name' => 'member', 'guard_name' => 'web']);
+        $this->user = User::factory()->create();
+        $this->user->assignRole('member');
+    }
+
+    public function test_can_list_agendas_with_strict_event_filtering(): void
+    {
+        $event = Event::factory()->create();
+
+        Agenda::create([
+            'title'      => 'BPH Pusat Agenda',
+            'start_date' => now(),
+            'event_id'   => null,
+        ]);
+
+        Agenda::create([
+            'title'      => 'Event Agenda',
+            'start_date' => now(),
+            'event_id'   => $event->id,
+        ]);
+
+        // Query without event_id -> should return BPH Pusat agenda only
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->getJson('/api/agendas');
+
+        $response->assertStatus(200);
+        $response->assertJsonCount(1, 'data');
+        $response->assertJsonFragment(['title' => 'BPH Pusat Agenda']);
+
+        // Query with event_id -> should return event agenda only
+        $responseEvent = $this->actingAs($this->user, 'sanctum')
+            ->getJson('/api/agendas?event_id=' . $event->id);
+
+        $responseEvent->assertStatus(200);
+        $responseEvent->assertJsonCount(1, 'data');
+        $responseEvent->assertJsonFragment(['title' => 'Event Agenda']);
+    }
+
+    public function test_can_set_agenda_targets(): void
+    {
+        $agenda = Agenda::create([
+            'title'      => 'Rapat Pleno',
+            'start_date' => now(),
+        ]);
+
+        $payload = [
+            'targets' => [
+                ['type' => 'all', 'value' => null],
+                ['type' => 'division', 'value' => '1'],
+                ['type' => 'coordinator', 'value' => null],
+            ],
+        ];
+
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->postJson("/api/agendas/{$agenda->id}/targets", $payload);
+
+        $response->assertStatus(200);
+        $this->assertDatabaseCount('agenda_targets', 3);
+        $this->assertDatabaseHas('agenda_targets', [
+            'agenda_id'   => $agenda->id,
+            'target_type' => 'division',
+            'target_value' => '1',
+        ]);
+    }
+}
+````
+
 ## File: tests/Feature/AuditTrailTest.php
 ````php
 <?php
@@ -4234,103 +4527,6 @@ class MonthlyDueTest extends TestCase
 
         $response->assertStatus(200);
         $response->assertJsonStructure(['users', 'dues']);
-    }
-}
-````
-
-## File: tests/Feature/SecurityTest.php
-````php
-<?php
-namespace Tests\Feature;
-
-use App\Models\User;
-use App\Models\Warning;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-use Spatie\Permission\Models\Role;
-use Tests\TestCase;
-
-class SecurityTest extends TestCase
-{
-    use RefreshDatabase;
-
-    protected function setUp(): void
-    {
-        parent::setUp();
-
-        Role::firstOrCreate(['name' => 'admin', 'guard_name' => 'web']);
-        Role::firstOrCreate(['name' => 'member', 'guard_name' => 'web']);
-        Role::firstOrCreate(['name' => 'advisor', 'guard_name' => 'web']);
-    }
-
-    public function test_member_is_forbidden_from_creating_meeting(): void
-    {
-        // Arrange
-        $member = User::factory()->create();
-        $member->assignRole('member');
-
-        // Act
-        $response = $this->actingAs($member, 'sanctum')
-            ->postJson('/api/meetings', [
-                'title' => 'Rapat Ilegal',
-                'date'  => '2026-08-20 10:00:00',
-            ]);
-
-        // Assert
-        $response->assertStatus(403);
-        $this->assertDatabaseMissing('meetings', ['title' => 'Rapat Ilegal']);
-    }
-
-    public function test_admin_can_create_meeting(): void
-    {
-        // Arrange
-        $admin = User::factory()->create();
-        $admin->assignRole('admin');
-
-        $payload = [
-            'title' => 'Rapat Koordinasi Admin',
-            'date'  => '2026-08-20 14:00:00',
-        ];
-
-        // Act
-        $response = $this->actingAs($admin, 'sanctum')
-            ->postJson('/api/meetings', $payload);
-
-        // Assert
-        $response->assertStatus(201);
-        $this->assertDatabaseHas('meetings', ['title' => 'Rapat Koordinasi Admin']);
-    }
-
-    public function test_member_can_only_see_own_warnings(): void
-    {
-        // Arrange
-        $member = User::factory()->create();
-        $member->assignRole('member');
-        $otherUser = User::factory()->create();
-        $admin = User::factory()->create();
-        $admin->assignRole('admin');
-
-        // Warning milik member
-        Warning::factory()->count(2)->create([
-            'user_id'  => $member->id,
-            'admin_id' => $admin->id,
-        ]);
-
-        // Warning milik orang lain
-        Warning::factory()->count(3)->create([
-            'user_id'  => $otherUser->id,
-            'admin_id' => $admin->id,
-        ]);
-
-        // Act
-        $response = $this->actingAs($member, 'sanctum')
-            ->getJson('/api/warnings');
-
-        // Assert
-        $response->assertStatus(200);
-        $response->assertJsonCount(2, 'data');
-
-        $returnedUserIds = collect($response->json('data'))->pluck('user_id')->unique()->values();
-        $this->assertEquals([$member->id], $returnedUserIds->toArray());
     }
 }
 ````
@@ -4630,6 +4826,165 @@ export default defineConfig({
 });
 ````
 
+## File: app/Http/Controllers/AgendaController.php
+````php
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Http\Resources\AgendaResource;
+use App\Models\Agenda;
+use App\Models\AgendaTarget;
+use App\Models\Event;
+use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\DB;
+
+class AgendaController extends Controller
+{
+    public function index(Request $request): AnonymousResourceCollection
+    {
+        $eventId = $request->input('event_id');
+        $search  = $request->input('search');
+
+        $agendas = Agenda::with(['attendances', 'targets'])
+            ->when($eventId, fn($q) => $q->where('event_id', $eventId), fn($q) => $q->whereNull('event_id'))
+            ->when($search, fn($q) => $q->where('title', 'like', "%{$search}%"))
+            ->orderBy('start_date', 'asc')
+            ->paginate(15);
+
+        return AgendaResource::collection($agendas);
+    }
+
+    public function sync(Request $request): JsonResponse
+    {
+        $eventId = $request->input('event_id');
+
+        // Untuk Agenda, asumsikan URL berada di .env (BPH) atau event_sync_url (opsional ke depan). 
+        // Sementara kita pakai TRACKING_AGENDA_URL dari env
+        $url = env('TRACKING_AGENDA_URL');
+        if (!$url) return response()->json(['message' => 'URL Sinkronisasi Agenda belum dikonfigurasi di .env'], 500);
+
+        $separator = str_contains($url, '?') ? '&' : '?';
+        $freshUrl = $url . $separator . 'cb=' . time();
+
+        try {
+            $context = stream_context_create(['http' => ['header' => "Cache-Control: no-cache\r\n"]]);
+            $csvData = file_get_contents($freshUrl, false, $context);
+            $rows = array_map('str_getcsv', explode("\n", $csvData));
+            
+            $header = [];
+            $dataStartIndex = 0;
+            
+            // Pencarian Header Agnostik
+            foreach ($rows as $index => $row) {
+                $cleanRow = array_map('trim', $row);
+                $rowString = strtolower(implode(' | ', $cleanRow));
+                
+                if (str_contains($rowString, 'nama agenda') && str_contains($rowString, 'tanggal mulai')) {
+                    $header = $cleanRow;
+                    $dataStartIndex = $index + 1;
+                    break;
+                }
+            }
+
+            if (empty($header)) return response()->json(['message' => 'Format Header (Nama Agenda, Tanggal Mulai, dll) tidak ditemukan.'], 400);
+
+            $idx = [
+                'nama'      => array_search('Nama Agenda', $header),
+                'start'     => array_search('Tanggal Mulai', $header),
+                'end'       => array_search('Tanggal Selesai', $header),
+                'tempat'    => array_search('Tempat', $header),
+                'pj'        => array_search('PJ/Divisi', $header),
+                'status'    => array_search('Status', $header),
+                'notulensi' => array_search('Link Notulensi', $header),
+            ];
+
+            $parseDate = function ($dateStr) {
+                if (empty($dateStr) || strtolower(trim($dateStr)) === 'nat' || strtolower(trim($dateStr)) === 'nan') return null;
+                try { 
+                    // FIX UTAMA: Ubah garis miring (/) menjadi strip (-) agar dikenali sebagai format DD-MM-YYYY oleh PHP/Carbon
+                    $cleanDate = str_replace('/', '-', trim($dateStr));
+                    return Carbon::parse($cleanDate)->format('Y-m-d H:i:s'); 
+                } catch (\Exception $e) { 
+                    return null; 
+                }
+            };
+            
+            $parseUrl = function ($urlStr) { return filter_var(trim($urlStr), FILTER_VALIDATE_URL) ? trim($urlStr) : null; };
+            $val = function($row, $index) { if ($index === false || !isset($row[$index])) return null; $v = trim($row[$index]); return (strtolower($v) === 'nan' || $v === '') ? null : $v; };
+
+            $successCount = 0;
+
+            DB::transaction(function () use ($rows, $dataStartIndex, $idx, $parseDate, $parseUrl, $val, $eventId, &$successCount) {
+                // Wipe Data (Scope Event/Global)
+                if ($eventId) {
+                    Agenda::where('event_id', $eventId)->delete();
+                } else {
+                    Agenda::whereNull('event_id')->delete();
+                }
+
+                for ($i = $dataStartIndex; $i < count($rows); $i++) {
+                    $row = array_map('trim', $rows[$i]);
+                    if (empty($row) || count($row) < 3) continue;
+
+                    $nama  = $val($row, $idx['nama']);
+                    $start = $parseDate($val($row, $idx['start']));
+                    
+                    if (empty($nama) || !$start) continue;
+
+                    Agenda::create([
+                        'event_id'    => $eventId ? (int)$eventId : null,
+                        'title'       => $nama,
+                        'start_date'  => $start,
+                        'end_date'    => $parseDate($val($row, $idx['end'])),
+                        'location'    => $val($row, $idx['tempat']),
+                        'pic'         => $val($row, $idx['pj']),
+                        'status'      => $val($row, $idx['status']),
+                        'minutes_url' => $parseUrl($val($row, $idx['notulensi'])),
+                    ]);
+
+                    $successCount++;
+                }
+            });
+
+            $target = $eventId ? "Kepanitiaan" : "BPH Pusat";
+            return response()->json(['message' => "Sinkronisasi selesai. Berhasil menyinkronkan $successCount agenda $target."]);
+
+        } catch (\Exception $e) { return response()->json(['message' => 'Gagal menyinkronisasi data agenda.', 'error' => $e->getMessage()], 500); }
+    }
+
+    public function setTargets(Request $request, $id): JsonResponse
+    {
+        $agenda = Agenda::findOrFail($id);
+        
+        $validated = $request->validate([
+            'targets'          => 'required|array',
+            'targets.*.type'   => 'required|in:all,bph,coordinator,division,position,user',
+            'targets.*.value'  => 'nullable|string',
+        ]);
+
+        DB::transaction(function () use ($agenda, $validated) {
+            // Hapus target lama
+            $agenda->targets()->delete();
+            
+            // Masukkan target baru
+            foreach ($validated['targets'] as $t) {
+                AgendaTarget::create([
+                    'agenda_id'    => $agenda->id,
+                    'target_type'  => $t['type'],
+                    'target_value' => $t['value'],
+                ]);
+            }
+        });
+
+        return response()->json(['message' => 'Target peserta agenda berhasil diperbarui.', 'data' => $agenda->targets]);
+    }
+}
+````
+
 ## File: app/Http/Controllers/Controller.php
 ````php
 <?php
@@ -4803,14 +5158,16 @@ class UserController extends Controller
     public function update(Request $request, User $user)
     {
         $validated = $request->validate([
-            'division_id' => 'nullable|exists:divisions,id',
-            'status'      => 'required|in:active,suspended',
-            'role'        => 'required|in:admin,member,advisor',
+            'division_id'    => 'nullable|exists:divisions,id',
+            'status'         => 'required|in:active,suspended',
+            'role'           => 'required|in:admin,member,advisor',
+            'is_coordinator' => 'required|boolean',
         ]);
 
         $user->update([
-            'division_id' => $validated['division_id'],
-            'status'      => $validated['status'],
+            'division_id'    => $validated['division_id'],
+            'status'         => $validated['status'],
+            'is_coordinator' => $validated['is_coordinator'],
         ]);
 
         $user->syncRoles([$validated['role']]);
@@ -4928,64 +5285,88 @@ class Document extends Model {
 }
 ````
 
-## File: app/Models/Meeting.php
-````php
-<?php
-namespace App\Models;
-
-use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasMany;
-
-class Meeting extends Model {
-    use HasFactory;
-
-    protected $fillable = ['event_id', 'title', 'date', 'minutes_url'];
-
-    protected $casts = [
-        'date' => 'datetime',
-    ];
-
-    public function event(): BelongsTo {
-        return $this->belongsTo(Event::class);
-    }
-
-    public function attendances(): HasMany {
-        return $this->hasMany(MeetingAttendance::class);
-    }
-}
-````
-
-## File: app/Providers/AppServiceProvider.php
+## File: app/Services/DashboardService.php
 ````php
 <?php
 
-namespace App\Providers;
+namespace App\Services;
 
-use Illuminate\Support\ServiceProvider;
+use App\Models\Agenda;
+use App\Models\Document;
+use App\Models\Event;
+use App\Models\Finance;
+use Carbon\Carbon;
 
-class AppServiceProvider extends ServiceProvider
+class DashboardService
 {
-    /**
-     * Register any application services.
-     */
-    public function register(): void
+    public function getStatistics(): array
     {
-        //
+        $now   = Carbon::now();
+        $today = $now->toDateString();
+
+        $totalIncome  = (float) Finance::where('type', 'income')->sum('amount');
+        $totalExpense = (float) Finance::where('type', 'expense')->sum('amount');
+        $totalBalance = $totalIncome - $totalExpense;
+
+        $incomeThisMonth = (float) Finance::where('type', 'income')
+            ->whereMonth('date', $now->month)
+            ->whereYear('date', $now->year)
+            ->sum('amount');
+
+        $expenseThisMonth = (float) Finance::where('type', 'expense')
+            ->whereMonth('date', $now->month)
+            ->whereYear('date', $now->year)
+            ->sum('amount');
+
+        $activeEventsCount = Event::where('start_date', '<=', $today)
+            ->where(function ($query) use ($today) {
+                $query->where('end_date', '>=', $today)
+                      ->orWhereNull('end_date');
+            })
+            ->count();
+
+        $documentsIssuedThisMonth = Document::whereMonth('created_at', $now->month)
+            ->whereYear('created_at', $now->year)
+            ->count();
+
+        $agendasThisMonth = Agenda::whereMonth('start_date', $now->month)
+            ->whereYear('start_date', $now->year)
+            ->count();
+
+        return [
+            'financial_health' => [
+                'total_balance'      => $totalBalance,
+                'income_this_month'  => $incomeThisMonth,
+                'expense_this_month' => $expenseThisMonth,
+            ],
+            'event_performance' => [
+                'active_events_count' => $activeEventsCount,
+            ],
+            'organizational_activity' => [
+                'documents_issued_this_month' => $documentsIssuedThisMonth,
+                'meetings_this_month'         => $agendasThisMonth,
+            ],
+        ];
     }
 
-    /**
-     * Bootstrap any application services.
-     */
-    public function boot(): void
+    public function getUpcomingAgenda(): array
     {
-        \App\Models\Finance::observe(\App\Observers\AuditObserver::class);
-        \App\Models\Document::observe(\App\Observers\AuditObserver::class);
-        \App\Models\Meeting::observe(\App\Observers\AuditObserver::class);
-        \App\Models\Warning::observe(\App\Observers\AuditObserver::class);
-        \App\Models\Event::observe(\App\Observers\AuditObserver::class);
-        \App\Models\User::observe(\App\Observers\AuditObserver::class);
+        $today = Carbon::now()->startOfDay();
+
+        $upcomingEvents = Event::where('start_date', '>=', $today->toDateString())
+            ->orderBy('start_date', 'asc')
+            ->limit(5)
+            ->get();
+
+        $upcomingAgendas = Agenda::where('start_date', '>=', $today)
+            ->orderBy('start_date', 'asc')
+            ->limit(5)
+            ->get();
+
+        return [
+            'upcoming_events'   => $upcomingEvents,
+            'upcoming_meetings' => $upcomingAgendas,
+        ];
     }
 }
 ````
@@ -5191,199 +5572,6 @@ Route::post('/login', [AuthController::class, 'login']);
 Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth:sanctum');
 ````
 
-## File: tests/Feature/DashboardTest.php
-````php
-<?php
-namespace Tests\Feature;
-
-use App\Models\Document;
-use App\Models\Event;
-use App\Models\Finance;
-use App\Models\Meeting;
-use App\Models\User;
-use Carbon\Carbon;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-use Spatie\Permission\Models\Role;
-use Tests\TestCase;
-
-class DashboardTest extends TestCase
-{
-    use RefreshDatabase;
-
-    protected User $user;
-
-    protected function setUp(): void
-    {
-        parent::setUp();
-        Role::firstOrCreate(['name' => 'member', 'guard_name' => 'web']);
-        $this->user = User::factory()->create();
-        $this->user->assignRole('member');
-    }
-
-    public function test_statistics_calculation_is_accurate(): void
-    {
-        // Arrange
-        $now = Carbon::now();
-        $lastMonth = Carbon::now()->subMonth();
-
-        // 1. Finance - Bulan Ini
-        Finance::create([
-            'user_id'    => $this->user->id,
-            'type'       => 'income',
-            'title'      => 'Income Bulan Ini',
-            'qty'        => 1,
-            'unit_price' => 1000.00,
-            'amount'     => 1000.00,
-            'date'       => $now->toDateString(),
-        ]);
-        Finance::create([
-            'user_id'    => $this->user->id,
-            'type'       => 'expense',
-            'title'      => 'Expense Bulan Ini',
-            'qty'        => 1,
-            'unit_price' => 300.00,
-            'amount'     => 300.00,
-            'date'       => $now->toDateString(),
-        ]);
-
-        // Finance - Bulan Lalu
-        Finance::create([
-            'user_id'    => $this->user->id,
-            'type'       => 'income',
-            'title'      => 'Income Bulan Lalu',
-            'qty'        => 1,
-            'unit_price' => 500.00,
-            'amount'     => 500.00,
-            'date'       => $lastMonth->toDateString(),
-        ]);
-        Finance::create([
-            'user_id'    => $this->user->id,
-            'type'       => 'expense',
-            'title'      => 'Expense Bulan Lalu',
-            'qty'        => 1,
-            'unit_price' => 200.00,
-            'amount'     => 200.00,
-            'date'       => $lastMonth->toDateString(),
-        ]);
-
-        // 2. Events - Aktif & Tidak Aktif
-        // Aktif: start_date <= today AND end_date >= today
-        Event::factory()->create([
-            'start_date' => $now->copy()->subDays(2)->toDateString(),
-            'end_date'   => $now->copy()->addDays(3)->toDateString(),
-        ]);
-        // Aktif: start_date <= today AND end_date IS NULL
-        Event::factory()->create([
-            'start_date' => $now->copy()->subDays(1)->toDateString(),
-            'end_date'   => null,
-        ]);
-        // Tidak Aktif: sudah lewat
-        Event::factory()->create([
-            'start_date' => $now->copy()->subMonth()->toDateString(),
-            'end_date'   => $now->copy()->subMonth()->addDays(5)->toDateString(),
-        ]);
-        // Tidak Aktif: belum mulai (start_date > today)
-        Event::factory()->create([
-            'start_date' => $now->copy()->addMonth()->toDateString(),
-            'end_date'   => $now->copy()->addMonth()->addDays(5)->toDateString(),
-        ]);
-
-        // 3. Documents - Bulan Ini vs Bulan Lalu
-        Document::factory()->create([
-            'created_by' => $this->user->id,
-            'created_at' => $now,
-        ]);
-        Document::factory()->create([
-            'created_by' => $this->user->id,
-            'created_at' => $lastMonth,
-        ]);
-
-        // 4. Meetings - Bulan Ini vs Bulan Lalu
-        Meeting::factory()->create([
-            'date' => $now->toDateTimeString(),
-        ]);
-        Meeting::factory()->create([
-            'date' => $lastMonth->toDateTimeString(),
-        ]);
-
-        // Act
-        $response = $this->actingAs($this->user, 'sanctum')
-            ->getJson('/api/dashboard/statistics');
-
-        // Assert
-        $response->assertStatus(200);
-        $response->assertJson([
-            'message' => 'Success',
-            'data' => [
-                'financial_health' => [
-                    'total_balance'      => 1000.00, // (1000 + 500) - (300 + 200) = 1000
-                    'income_this_month'  => 1000.00,
-                    'expense_this_month' => 300.00,
-                ],
-                'event_performance' => [
-                    'active_events_count' => 2,
-                ],
-                'organizational_activity' => [
-                    'documents_issued_this_month' => 1,
-                    'meetings_this_month'         => 1,
-                ],
-            ],
-        ]);
-    }
-
-    public function test_upcoming_agenda_only_shows_future_dates(): void
-    {
-        // Arrange
-        $now = Carbon::now();
-
-        // Past Events
-        Event::factory()->create([
-            'name'       => 'Past Event 1',
-            'start_date' => $now->copy()->subDays(10)->toDateString(),
-        ]);
-
-        // Future Events (7 events to test limit 5 and sorting)
-        for ($i = 1; $i <= 7; $i++) {
-            Event::factory()->create([
-                'name'       => "Future Event $i",
-                'start_date' => $now->copy()->addDays($i)->toDateString(),
-            ]);
-        }
-
-        // Past Meetings
-        Meeting::factory()->create([
-            'title' => 'Past Meeting 1',
-            'date'  => $now->copy()->subDays(5)->toDateTimeString(),
-        ]);
-
-        // Future Meetings (7 meetings to test limit 5 and sorting)
-        for ($i = 1; $i <= 7; $i++) {
-            Meeting::factory()->create([
-                'title' => "Future Meeting $i",
-                'date'  => $now->copy()->addDays($i)->toDateTimeString(),
-            ]);
-        }
-
-        // Act
-        $response = $this->actingAs($this->user, 'sanctum')
-            ->getJson('/api/dashboard/upcoming-agenda');
-
-        // Assert
-        $response->assertStatus(200);
-        $response->assertJsonCount(5, 'data.upcoming_events');
-        $response->assertJsonCount(5, 'data.upcoming_meetings');
-
-        $events = $response->json('data.upcoming_events');
-        $this->assertEquals('Future Event 1', $events[0]['name']);
-        $this->assertEquals('Future Event 5', $events[4]['name']);
-
-        $meetings = $response->json('data.upcoming_meetings');
-        $this->assertEquals('Future Meeting 1', $meetings[0]['title']);
-        $this->assertEquals('Future Meeting 5', $meetings[4]['title']);
-    }
-}
-````
-
 ## File: tests/Feature/ProfileTest.php
 ````php
 <?php
@@ -5471,6 +5659,103 @@ class ProfileTest extends TestCase
         ]);
 
         $this->assertTrue(Hash::check('newsecret123', $this->user->fresh()->password));
+    }
+}
+````
+
+## File: tests/Feature/SecurityTest.php
+````php
+<?php
+namespace Tests\Feature;
+
+use App\Models\User;
+use App\Models\Warning;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Spatie\Permission\Models\Role;
+use Tests\TestCase;
+
+class SecurityTest extends TestCase
+{
+    use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        Role::firstOrCreate(['name' => 'admin', 'guard_name' => 'web']);
+        Role::firstOrCreate(['name' => 'member', 'guard_name' => 'web']);
+        Role::firstOrCreate(['name' => 'advisor', 'guard_name' => 'web']);
+    }
+
+    public function test_member_is_forbidden_from_creating_divisions(): void
+    {
+        // Arrange
+        $member = User::factory()->create();
+        $member->assignRole('member');
+
+        // Act
+        $response = $this->actingAs($member, 'sanctum')
+            ->postJson('/api/divisions', [
+                'name'        => 'Divisi Ilegal',
+                'description' => 'Divisi Test',
+            ]);
+
+        // Assert
+        $response->assertStatus(403);
+        $this->assertDatabaseMissing('divisions', ['name' => 'Divisi Ilegal']);
+    }
+
+    public function test_admin_can_create_divisions(): void
+    {
+        // Arrange
+        $admin = User::factory()->create();
+        $admin->assignRole('admin');
+
+        $payload = [
+            'name'        => 'Divisi Humas',
+            'description' => 'Divisi Hubungan Masyarakat',
+        ];
+
+        // Act
+        $response = $this->actingAs($admin, 'sanctum')
+            ->postJson('/api/divisions', $payload);
+
+        // Assert
+        $response->assertStatus(201);
+        $this->assertDatabaseHas('divisions', ['name' => 'Divisi Humas']);
+    }
+
+    public function test_member_can_only_see_own_warnings(): void
+    {
+        // Arrange
+        $member = User::factory()->create();
+        $member->assignRole('member');
+        $otherUser = User::factory()->create();
+        $admin = User::factory()->create();
+        $admin->assignRole('admin');
+
+        // Warning milik member
+        Warning::factory()->count(2)->create([
+            'user_id'  => $member->id,
+            'admin_id' => $admin->id,
+        ]);
+
+        // Warning milik orang lain
+        Warning::factory()->count(3)->create([
+            'user_id'  => $otherUser->id,
+            'admin_id' => $admin->id,
+        ]);
+
+        // Act
+        $response = $this->actingAs($member, 'sanctum')
+            ->getJson('/api/warnings');
+
+        // Assert
+        $response->assertStatus(200);
+        $response->assertJsonCount(2, 'data');
+
+        $returnedUserIds = collect($response->json('data'))->pluck('user_id')->unique()->values();
+        $this->assertEquals([$member->id], $returnedUserIds->toArray());
     }
 }
 ````
@@ -5628,83 +5913,6 @@ class EventController extends Controller
 }
 ````
 
-## File: app/Http/Controllers/MeetingAttendanceController.php
-````php
-<?php
-namespace App\Http\Controllers;
-
-use App\Http\Resources\MeetingAttendanceResource;
-use App\Models\MeetingAttendance;
-use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-
-class MeetingAttendanceController extends Controller
-{
-    public function index(Request $request): JsonResponse
-    {
-        $request->validate(['meeting_id' => 'required|exists:meetings,id']);
-
-        $attendances = MeetingAttendance::with(['user'])
-            ->where('meeting_id', $request->meeting_id)
-            ->get();
-
-        return response()->json([
-            'message' => 'Success',
-            'data'    => MeetingAttendanceResource::collection($attendances),
-        ]);
-    }
-
-    public function store(Request $request): JsonResponse
-    {
-        $validated = $request->validate([
-            'meeting_id' => ['required', 'exists:meetings,id'],
-            'user_id'    => ['required', 'exists:users,id'],
-            'status'     => ['required', 'in:present,permit,sick,absent'],
-            'proof_url'  => ['nullable', 'string', 'max:255'],
-        ]);
-
-        $attendance = MeetingAttendance::updateOrCreate(
-            ['meeting_id' => $validated['meeting_id'], 'user_id' => $validated['user_id']],
-            ['status' => $validated['status'], 'proof_url' => $validated['proof_url']]
-        );
-
-        return response()->json([
-            'message' => 'Success',
-            'data'    => new MeetingAttendanceResource($attendance),
-        ], 201);
-    }
-
-    public function bulkStore(Request $request): JsonResponse
-    {
-        $validated = $request->validate([
-            'meeting_id'              => ['required', 'exists:meetings,id'],
-            'attendances'             => ['required', 'array'],
-            'attendances.*.user_id'   => ['required', 'exists:users,id'],
-            'attendances.*.status'    => ['required', 'in:present,permit,sick,absent'],
-            'attendances.*.proof_url' => ['nullable', 'string', 'max:255'],
-        ]);
-
-        DB::transaction(function () use ($validated) {
-            foreach ($validated['attendances'] as $att) {
-                MeetingAttendance::updateOrCreate(
-                    [
-                        'meeting_id' => $validated['meeting_id'],
-                        'user_id'    => $att['user_id']
-                    ],
-                    [
-                        'status'    => $att['status'],
-                        'proof_url' => $att['proof_url'] ?? null
-                    ]
-                );
-            }
-        });
-
-        return response()->json(['message' => 'Absensi massal berhasil disimpan.']);
-    }
-}
-````
-
 ## File: app/Http/Resources/FinanceResource.php
 ````php
 <?php
@@ -5811,6 +6019,39 @@ class Finance extends Model {
 
     public function event(): BelongsTo {
         return $this->belongsTo(Event::class);
+    }
+}
+````
+
+## File: app/Providers/AppServiceProvider.php
+````php
+<?php
+
+namespace App\Providers;
+
+use Illuminate\Support\ServiceProvider;
+
+class AppServiceProvider extends ServiceProvider
+{
+    /**
+     * Register any application services.
+     */
+    public function register(): void
+    {
+        //
+    }
+
+    /**
+     * Bootstrap any application services.
+     */
+    public function boot(): void
+    {
+        \App\Models\Finance::observe(\App\Observers\AuditObserver::class);
+        \App\Models\Document::observe(\App\Observers\AuditObserver::class);
+        \App\Models\Agenda::observe(\App\Observers\AuditObserver::class);
+        \App\Models\Warning::observe(\App\Observers\AuditObserver::class);
+        \App\Models\Event::observe(\App\Observers\AuditObserver::class);
+        \App\Models\User::observe(\App\Observers\AuditObserver::class);
     }
 }
 ````
@@ -5956,78 +6197,194 @@ class DatabaseSeeder extends Seeder
 }
 ````
 
-## File: tests/Feature/MeetingAttendanceTest.php
+## File: tests/Feature/DashboardTest.php
 ````php
 <?php
+
 namespace Tests\Feature;
 
-use App\Models\Meeting;
-use App\Models\MeetingAttendance;
+use App\Models\Document;
+use App\Models\Event;
+use App\Models\Finance;
+use App\Models\Agenda;
 use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
-class MeetingAttendanceTest extends TestCase
+class DashboardTest extends TestCase
 {
     use RefreshDatabase;
 
-    protected User $admin;
+    protected User $user;
 
     protected function setUp(): void
     {
         parent::setUp();
-        Role::firstOrCreate(['name' => 'admin', 'guard_name' => 'web']);
-        $this->admin = User::factory()->create();
-        $this->admin->assignRole('admin');
+        Role::firstOrCreate(['name' => 'member', 'guard_name' => 'web']);
+        $this->user = User::factory()->create();
+        $this->user->assignRole('member');
     }
 
-    public function test_can_list_attendances(): void
+    public function test_statistics_calculation_is_accurate(): void
     {
         // Arrange
-        $meeting = Meeting::factory()->create();
-        MeetingAttendance::factory()->count(3)->create([
-            'meeting_id' => $meeting->id,
+        $now = Carbon::now();
+        $lastMonth = Carbon::now()->subMonth();
+
+        // 1. Finance - Bulan Ini
+        Finance::create([
+            'user_id'    => $this->user->id,
+            'type'       => 'income',
+            'title'      => 'Income Bulan Ini',
+            'qty'        => 1,
+            'unit_price' => 1000.00,
+            'amount'     => 1000.00,
+            'date'       => $now->toDateString(),
+        ]);
+        Finance::create([
+            'user_id'    => $this->user->id,
+            'type'       => 'expense',
+            'title'      => 'Expense Bulan Ini',
+            'qty'        => 1,
+            'unit_price' => 300.00,
+            'amount'     => 300.00,
+            'date'       => $now->toDateString(),
+        ]);
+
+        // Finance - Bulan Lalu
+        Finance::create([
+            'user_id'    => $this->user->id,
+            'type'       => 'income',
+            'title'      => 'Income Bulan Lalu',
+            'qty'        => 1,
+            'unit_price' => 500.00,
+            'amount'     => 500.00,
+            'date'       => $lastMonth->toDateString(),
+        ]);
+        Finance::create([
+            'user_id'    => $this->user->id,
+            'type'       => 'expense',
+            'title'      => 'Expense Bulan Lalu',
+            'qty'        => 1,
+            'unit_price' => 200.00,
+            'amount'     => 200.00,
+            'date'       => $lastMonth->toDateString(),
+        ]);
+
+        // 2. Events - Aktif & Tidak Aktif
+        Event::factory()->create([
+            'start_date' => $now->copy()->subDays(2)->toDateString(),
+            'end_date'   => $now->copy()->addDays(3)->toDateString(),
+        ]);
+        Event::factory()->create([
+            'start_date' => $now->copy()->subDays(1)->toDateString(),
+            'end_date'   => null,
+        ]);
+        Event::factory()->create([
+            'start_date' => $now->copy()->subMonth()->toDateString(),
+            'end_date'   => $now->copy()->subMonth()->addDays(5)->toDateString(),
+        ]);
+        Event::factory()->create([
+            'start_date' => $now->copy()->addMonth()->toDateString(),
+            'end_date'   => $now->copy()->addMonth()->addDays(5)->toDateString(),
+        ]);
+
+        // 3. Documents - Bulan Ini vs Bulan Lalu
+        Document::factory()->create([
+            'created_by' => $this->user->id,
+            'created_at' => $now,
+        ]);
+        Document::factory()->create([
+            'created_by' => $this->user->id,
+            'created_at' => $lastMonth,
+        ]);
+
+        // 4. Agendas - Bulan Ini vs Bulan Lalu
+        Agenda::create([
+            'title'      => 'Agenda Bulan Ini',
+            'start_date' => $now->toDateTimeString(),
+        ]);
+        Agenda::create([
+            'title'      => 'Agenda Bulan Lalu',
+            'start_date' => $lastMonth->toDateTimeString(),
         ]);
 
         // Act
-        $response = $this->actingAs($this->admin, 'sanctum')
-            ->getJson('/api/meeting-attendances?meeting_id=' . $meeting->id);
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->getJson('/api/dashboard/statistics');
 
         // Assert
         $response->assertStatus(200);
-        $response->assertJsonCount(3, 'data');
-        $response->assertJsonStructure([
-            'message',
-            'data' => [['id', 'meeting_id', 'user_id', 'status']],
+        $response->assertJson([
+            'message' => 'Success',
+            'data' => [
+                'financial_health' => [
+                    'total_balance'      => 1000.00,
+                    'income_this_month'  => 1000.00,
+                    'expense_this_month' => 300.00,
+                ],
+                'event_performance' => [
+                    'active_events_count' => 2,
+                ],
+                'organizational_activity' => [
+                    'documents_issued_this_month' => 1,
+                    'meetings_this_month'         => 1,
+                ],
+            ],
         ]);
     }
 
-    public function test_can_store_valid_attendance(): void
+    public function test_upcoming_agenda_only_shows_future_dates(): void
     {
         // Arrange
-        $meeting = Meeting::factory()->create();
-        $user = User::factory()->create();
+        $now = Carbon::now();
 
-        $payload = [
-            'meeting_id' => $meeting->id,
-            'user_id'    => $user->id,
-            'status'     => 'present',
-            'proof_url'  => null,
-        ];
+        // Past Events
+        Event::factory()->create([
+            'name'       => 'Past Event 1',
+            'start_date' => $now->copy()->subDays(10)->toDateString(),
+        ]);
+
+        // Future Events (7 events to test limit 5 and sorting)
+        for ($i = 1; $i <= 7; $i++) {
+            Event::factory()->create([
+                'name'       => "Future Event $i",
+                'start_date' => $now->copy()->addDays($i)->toDateString(),
+            ]);
+        }
+
+        // Past Agendas
+        Agenda::create([
+            'title'      => 'Past Agenda 1',
+            'start_date' => $now->copy()->subDays(5)->toDateTimeString(),
+        ]);
+
+        // Future Agendas (7 agendas to test limit 5 and sorting)
+        for ($i = 1; $i <= 7; $i++) {
+            Agenda::create([
+                'title'      => "Future Agenda $i",
+                'start_date' => $now->copy()->addDays($i)->toDateTimeString(),
+            ]);
+        }
 
         // Act
-        $response = $this->actingAs($this->admin, 'sanctum')
-            ->postJson('/api/meeting-attendances', $payload);
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->getJson('/api/dashboard/upcoming-agenda');
 
         // Assert
-        $response->assertStatus(201);
-        $response->assertJsonPath('message', 'Success');
-        $this->assertDatabaseHas('meeting_attendances', [
-            'meeting_id' => $meeting->id,
-            'user_id'    => $user->id,
-            'status'     => 'present',
-        ]);
+        $response->assertStatus(200);
+        $response->assertJsonCount(5, 'data.upcoming_events');
+        $response->assertJsonCount(5, 'data.upcoming_meetings');
+
+        $events = $response->json('data.upcoming_events');
+        $this->assertEquals('Future Event 1', $events[0]['name']);
+        $this->assertEquals('Future Event 5', $events[4]['name']);
+
+        $meetings = $response->json('data.upcoming_meetings');
+        $this->assertEquals('Future Agenda 1', $meetings[0]['title']);
+        $this->assertEquals('Future Agenda 5', $meetings[4]['title']);
     }
 }
 ````
@@ -6124,72 +6481,6 @@ class MeetingAttendanceTest extends TestCase
 }
 ````
 
-## File: tests/Feature/MeetingTest.php
-````php
-<?php
-namespace Tests\Feature;
-
-use App\Models\Meeting;
-use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-use Spatie\Permission\Models\Role;
-use Tests\TestCase;
-
-class MeetingTest extends TestCase
-{
-    use RefreshDatabase;
-
-    protected User $admin;
-
-    protected function setUp(): void
-    {
-        parent::setUp();
-        Role::firstOrCreate(['name' => 'admin', 'guard_name' => 'web']);
-        $this->admin = User::factory()->create();
-        $this->admin->assignRole('admin');
-    }
-
-    public function test_can_list_meetings(): void
-    {
-        // Arrange
-        Meeting::factory()->count(3)->create();
-
-        // Act
-        $response = $this->actingAs($this->admin, 'sanctum')
-            ->getJson('/api/meetings');
-
-        // Assert
-        $response->assertStatus(200);
-        $response->assertJsonCount(3, 'data');
-        $response->assertJsonStructure([
-            'data' => [['id', 'title', 'date', 'minutes_url']],
-            'meta' => ['current_page', 'per_page', 'total'],
-        ]);
-    }
-
-    public function test_can_store_valid_meeting(): void
-    {
-        // Arrange
-        $payload = [
-            'title'       => 'Rapat Koordinasi Bulanan',
-            'date'        => '2026-08-20 10:00:00',
-            'minutes_url' => 'https://drive.google.com/notulen-rapat',
-        ];
-
-        // Act
-        $response = $this->actingAs($this->admin, 'sanctum')
-            ->postJson('/api/meetings', $payload);
-
-        // Assert
-        $response->assertStatus(201);
-        $response->assertJsonPath('message', 'Success');
-        $this->assertDatabaseHas('meetings', [
-            'title' => 'Rapat Koordinasi Bulanan',
-        ]);
-    }
-}
-````
-
 ## File: tests/Feature/WarningTest.php
 ````php
 <?php
@@ -6277,13 +6568,14 @@ class User extends Authenticatable {
 
     protected $fillable = [
         'name', 'email', 'password', 'status', 'division_id',
-        'nim', 'phone', 'prodi', 'angkatan', 'address'
+        'is_coordinator', 'nim', 'phone', 'prodi', 'angkatan', 'address'
     ];
 
     protected $hidden = ['password', 'remember_token'];
 
     protected $casts = [
-        'password' => 'hashed',
+        'password'       => 'hashed',
+        'is_coordinator' => 'boolean',
     ];
 
     public function division(): BelongsTo {
@@ -6416,81 +6708,6 @@ class DocumentTest extends TestCase
         $this->assertDatabaseHas('documents', [
             'letter_number' => 'SK-001/PROTIK/2026',
             'created_by'    => $user->id,
-        ]);
-    }
-}
-````
-
-## File: app/Http/Controllers/MeetingController.php
-````php
-<?php
-
-namespace App\Http\Controllers;
-
-use App\Http\Resources\MeetingResource;
-use App\Models\Meeting;
-use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
-use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
-
-class MeetingController extends Controller
-{
-    public function index(Request $request): AnonymousResourceCollection
-    {
-        $meetings = Meeting::with(['attendances', 'event'])
-            ->when($request->search, fn ($q, $search) =>
-                $q->where('title', 'like', "%{$search}%")
-            )
-            ->where('event_id', $request->input('event_id'))
-            ->latest('date')
-            ->paginate(15);
-
-        return MeetingResource::collection($meetings);
-    }
-
-    public function store(Request $request): JsonResponse
-    {
-        $this->authorizeEventAccess($request->user(), $request->event_id, ['Ketua', 'Sekretaris']);
-
-        $validated = $request->validate([
-            'event_id'    => ['nullable', 'exists:events,id'],
-            'title'       => ['required', 'string', 'max:255'],
-            'date'        => ['required', 'date'],
-            'minutes_url' => ['nullable', 'string', 'max:255'],
-        ]);
-
-        $meeting = Meeting::create($validated);
-
-        return response()->json(['message' => 'Success', 'data' => new MeetingResource($meeting)], 201);
-    }
-
-    public function update(Request $request, Meeting $meeting): JsonResponse
-    {
-        $this->authorizeEventAccess($request->user(), $meeting->event_id, ['Ketua', 'Sekretaris']);
-
-        $validated = $request->validate([
-            'event_id'    => ['nullable', 'exists:events,id'],
-            'title'       => ['required', 'string', 'max:255'],
-            'date'        => ['required', 'date'],
-            'minutes_url' => ['nullable', 'string', 'max:255'],
-        ]);
-
-        $meeting->update($validated);
-
-        return response()->json([
-            'message' => 'Success',
-            'data'    => new MeetingResource($meeting->load(['attendances', 'event'])),
-        ]);
-    }
-
-    public function destroy(Request $request, Meeting $meeting): JsonResponse
-    {
-        $this->authorizeEventAccess($request->user(), $meeting->event_id, ['Ketua', 'Sekretaris']);
-
-        $meeting->delete();
-
-        return response()->json([
-            'message' => 'Success',
         ]);
     }
 }
@@ -6866,15 +7083,18 @@ class DocumentController extends Controller
             
             $header = [];
             $dataStartIndex = 0;
+            
+            // FIX: Sanitasi Header menggunakan trim
             foreach ($rows as $index => $row) {
-                if (in_array('Nomor Surat', $row) && in_array('Perihal', $row)) {
-                    $header = $row;
+                $cleanRow = array_map('trim', $row);
+                if (in_array('Nomor Surat', $cleanRow) && in_array('Perihal', $cleanRow)) {
+                    $header = $cleanRow;
                     $dataStartIndex = $index + 1;
                     break;
                 }
             }
 
-            if (empty($header)) return response()->json(['message' => 'Format Header tidak ditemukan.'], 400);
+            if (empty($header)) return response()->json(['message' => 'Format Header (Nomor Surat & Perihal) tidak ditemukan.'], 400);
 
             $noSuratIdx = array_search('Nomor Surat', $header);
             $perihalIdx = array_search('Perihal', $header);
@@ -6899,22 +7119,24 @@ class DocumentController extends Controller
             $failed = 0;
 
             for ($i = $dataStartIndex; $i < count($rows); $i++) {
-                $row = $rows[$i];
+                // FIX: Sanitasi seluruh isi baris untuk membersihkan spasi tak kasat mata
+                $row = array_map('trim', $rows[$i]);
                 if (empty($row) || count($row) < 3) continue;
 
                 $noSurat = $row[$noSuratIdx] ?? null;
                 $perihal = $row[$perihalIdx] ?? null;
+                
+                // FIX: Validasi ketat terhadap spasi kosong
                 if (empty($noSurat) || strtolower($noSurat) === 'nan') continue;
 
                 $tglBuat = $parseDate(($tglBuatIdx !== false) ? ($row[$tglBuatIdx] ?? null) : null) ?? now()->toDateString();
                 $title = (!empty($perihal) && strtolower($perihal) !== 'nan') ? $perihal : 'Tanpa Judul';
 
                 try {
-                    // FIX: Kriteria pencarian HARUS menyertakan event_id agar surat Event tidak membajak/menimpa surat BPH Pusat
                     $doc = Document::updateOrCreate(
                         [
                             'letter_number' => $noSurat,
-                            'event_id'      => $eventId ? (int)$eventId : null, // Kunci Komposit
+                            'event_id'      => $eventId ? (int)$eventId : null,
                         ],
                         [
                             'title'         => $title,
@@ -7406,6 +7628,18 @@ Sebagai penutup sesi dan peresmian rilis versi 1.0.0, simpan pencapaianmu ke dal
 ## [2026-08-23]
 ### Added
 - Melakukan mutasi arsitektural pada tabel `events` dengan menambahkan kolom *metadata* `document_sync_url` dan `finance_sync_url`. Modifikasi ini menginisiasi transisi sistem dari *Centralized BPH Sync* menjadi ekosistem *Distributed Cloud Sync* berskala *Multi-Event*.
+## [2026-08-23]
+### Changed
+- Mengeksekusi *Refactoring* arsitektural skala masif: mengubah ekosistem `Meetings` menjadi entitas `Agendas`. Perubahan ini mencakup skema *Database* (kolom `start_date`, `end_date`, `location`, `pic`, `status`), Models ORM, dan relasi *Foreign Key* absensi.
+- Memusnahkan `MeetingController` dan menggantinya dengan `AgendaController` yang ditenagai oleh mesin *Context-Aware Cloud Sync (Wipe & Reload)*, menjadikan *Spreadsheet* Daftar Agenda sebagai *Single Source of Truth* (SSOT) yang *Future-Proof*.
+## [2026-08-23]
+### Fixed
+- Menambal kegagalan mutasi data (0 data tersinkronisasi) pada modul `AgendaController` dengan merevisi parser tanggal *Carbon*. Mengimplementasikan transformasi *string replacement* (`/` menjadi `-`) untuk meredam *Parsing Exception* akibat misinterpretasi format `d/m/Y` menjadi struktur kalender Amerika (`m/d/Y`).
+## [2026-08-23]
+### Added
+- Mengimplementasikan entitas atribut `is_coordinator` (boolean) pada tabel `users` untuk mengakomodasi struktur hierarki makro organisasi.
+- Mengimplementasikan tabel relasional `agenda_targets` yang menganut skema polimorfik semu (`target_type`, `target_value`), memungkinkan definisi otorisasi absensi multi-dimensi (Berdasarkan Divisi, Jabatan, Role, hingga Spesifik Entitas User / Target Lepas).
+- Membuat API Endpoint terdedikasi `POST /api/agendas/{id}/targets` untuk proses *Bulk Upsert* matriks target absensi.
 ````
 
 ## File: routes/api.php
@@ -7414,6 +7648,8 @@ Sebagai penutup sesi dan peresmian rilis versi 1.0.0, simpan pencapaianmu ke dal
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\AgendaAttendanceController;
+use App\Http\Controllers\AgendaController;
 use App\Http\Controllers\AuditTrailController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DivisionController;
@@ -7421,8 +7657,6 @@ use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\EventCommitteeController;
 use App\Http\Controllers\EventController;
 use App\Http\Controllers\FinanceController;
-use App\Http\Controllers\MeetingAttendanceController;
-use App\Http\Controllers\MeetingController;
 use App\Http\Controllers\MonthlyDueController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\RoleController;
@@ -7445,8 +7679,8 @@ Route::middleware('auth:sanctum')->group(function () {
     // --- READ-ONLY / GENERAL ENDPOINTS ---
     // (Aman diakses semua role yang login untuk keperluan fetch data)
     Route::get('/events', [EventController::class, 'index']);
-    Route::get('/meetings', [MeetingController::class, 'index']);
-    Route::get('/meeting-attendances', [MeetingAttendanceController::class, 'index']);
+    Route::get('/agendas', [AgendaController::class, 'index']);
+    Route::get('/agenda-attendances', [AgendaAttendanceController::class, 'index']);
     Route::get('/documents', [DocumentController::class, 'index']);
     Route::get('/warnings', [WarningController::class, 'index']);
     Route::get('/finances', [FinanceController::class, 'index']);
@@ -7456,13 +7690,13 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // --- CONTEXTUAL AUTH RESOURCES ---
     // (Bisa di-POST/PUT oleh Admin DAN anggota BPH Event via Authorization Policy)
-    Route::post('/meeting-attendances', [MeetingAttendanceController::class, 'store']);
-    Route::post('/meeting-attendances/bulk', [MeetingAttendanceController::class, 'bulkStore']);
+    Route::post('/agendas/sync', [AgendaController::class, 'sync']);
+    Route::post('/agendas/{id}/targets', [AgendaController::class, 'setTargets']);
+    Route::post('/agenda-attendances/bulk', [AgendaAttendanceController::class, 'bulkSync']);
     Route::post('/finances/sync', [FinanceController::class, 'sync']);
     Route::apiResource('finances', FinanceController::class)->except(['create', 'edit', 'index']);
     Route::post('/documents/sync', [DocumentController::class, 'sync']);
     Route::apiResource('documents', DocumentController::class)->except(['create', 'edit', 'index']);
-    Route::apiResource('meetings', MeetingController::class)->except(['create', 'edit', 'index']);
     Route::apiResource('events', EventController::class)->except(['create', 'edit', 'index']);
 
     // --- STRICT ADMIN WRITE ENDPOINTS ---

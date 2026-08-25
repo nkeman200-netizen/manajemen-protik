@@ -14,4 +14,8 @@ class Agenda extends Model {
 
     public function event(): BelongsTo { return $this->belongsTo(Event::class); }
     public function attendances(): HasMany { return $this->hasMany(AgendaAttendance::class); }
+
+    public function targets(): HasMany {
+        return $this->hasMany(AgendaTarget::class);
+    }
 }

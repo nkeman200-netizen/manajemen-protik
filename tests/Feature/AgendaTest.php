@@ -55,4 +55,31 @@ class AgendaTest extends TestCase
         $responseEvent->assertJsonCount(1, 'data');
         $responseEvent->assertJsonFragment(['title' => 'Event Agenda']);
     }
+
+    public function test_can_set_agenda_targets(): void
+    {
+        $agenda = Agenda::create([
+            'title'      => 'Rapat Pleno',
+            'start_date' => now(),
+        ]);
+
+        $payload = [
+            'targets' => [
+                ['type' => 'all', 'value' => null],
+                ['type' => 'division', 'value' => '1'],
+                ['type' => 'coordinator', 'value' => null],
+            ],
+        ];
+
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->postJson("/api/agendas/{$agenda->id}/targets", $payload);
+
+        $response->assertStatus(200);
+        $this->assertDatabaseCount('agenda_targets', 3);
+        $this->assertDatabaseHas('agenda_targets', [
+            'agenda_id'   => $agenda->id,
+            'target_type' => 'division',
+            'target_value' => '1',
+        ]);
+    }
 }

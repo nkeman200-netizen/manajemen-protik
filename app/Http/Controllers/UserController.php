@@ -22,14 +22,16 @@ class UserController extends Controller
     public function update(Request $request, User $user)
     {
         $validated = $request->validate([
-            'division_id' => 'nullable|exists:divisions,id',
-            'status'      => 'required|in:active,suspended',
-            'role'        => 'required|in:admin,member,advisor',
+            'division_id'    => 'nullable|exists:divisions,id',
+            'status'         => 'required|in:active,suspended',
+            'role'           => 'required|in:admin,member,advisor',
+            'is_coordinator' => 'required|boolean',
         ]);
 
         $user->update([
-            'division_id' => $validated['division_id'],
-            'status'      => $validated['status'],
+            'division_id'    => $validated['division_id'],
+            'status'         => $validated['status'],
+            'is_coordinator' => $validated['is_coordinator'],
         ]);
 
         $user->syncRoles([$validated['role']]);

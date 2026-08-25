@@ -217,3 +217,12 @@ Sebagai penutup sesi dan peresmian rilis versi 1.0.0, simpan pencapaianmu ke dal
 ## [2026-08-23]
 ### Fixed
 - Menambal kegagalan mutasi data (0 data tersinkronisasi) pada modul `AgendaController` dengan merevisi parser tanggal *Carbon*. Mengimplementasikan transformasi *string replacement* (`/` menjadi `-`) untuk meredam *Parsing Exception* akibat misinterpretasi format `d/m/Y` menjadi struktur kalender Amerika (`m/d/Y`).
+## [2026-08-23]
+### Added
+- Mengimplementasikan entitas atribut `is_coordinator` (boolean) pada tabel `users` untuk mengakomodasi struktur hierarki makro organisasi.
+- Mengimplementasikan tabel relasional `agenda_targets` yang menganut skema polimorfik semu (`target_type`, `target_value`), memungkinkan definisi otorisasi absensi multi-dimensi (Berdasarkan Divisi, Jabatan, Role, hingga Spesifik Entitas User / Target Lepas).
+- Membuat API Endpoint terdedikasi `POST /api/agendas/{id}/targets` untuk proses *Bulk Upsert* matriks target absensi.
+## [2026-08-24]
+### Changed
+- Menggugurkan strategi *Dummy Data Seeding* untuk beralih ke skema *Production-Ready Seeding*. Mengintegrasikan *Single Source of Truth* dari dokumen STO PROTIK 2026/2027 (31 Entitas Pengurus + 8 Divisi Resmi).
+- Merefaktorisasi `DatabaseSeeder.php` untuk mengeksekusi inisialisasi relasional terpusat, mencakup pemetaan Spatie Roles (*Admin, Member, Advisor*), properti demografi anggota, dan injeksi *Event* statis "Makrab Protic 2026" beserta data transaksi historisnya sebagai referensi pengujian modul *Cloud Sync*.

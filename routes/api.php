@@ -2,6 +2,7 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\AgendaAttendanceController;
 use App\Http\Controllers\AgendaController;
 use App\Http\Controllers\AuditTrailController;
 use App\Http\Controllers\DashboardController;
@@ -33,6 +34,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // (Aman diakses semua role yang login untuk keperluan fetch data)
     Route::get('/events', [EventController::class, 'index']);
     Route::get('/agendas', [AgendaController::class, 'index']);
+    Route::get('/agenda-attendances', [AgendaAttendanceController::class, 'index']);
     Route::get('/documents', [DocumentController::class, 'index']);
     Route::get('/warnings', [WarningController::class, 'index']);
     Route::get('/finances', [FinanceController::class, 'index']);
@@ -43,6 +45,8 @@ Route::middleware('auth:sanctum')->group(function () {
     // --- CONTEXTUAL AUTH RESOURCES ---
     // (Bisa di-POST/PUT oleh Admin DAN anggota BPH Event via Authorization Policy)
     Route::post('/agendas/sync', [AgendaController::class, 'sync']);
+    Route::post('/agendas/{id}/targets', [AgendaController::class, 'setTargets']);
+    Route::post('/agenda-attendances/bulk', [AgendaAttendanceController::class, 'bulkSync']);
     Route::post('/finances/sync', [FinanceController::class, 'sync']);
     Route::apiResource('finances', FinanceController::class)->except(['create', 'edit', 'index']);
     Route::post('/documents/sync', [DocumentController::class, 'sync']);

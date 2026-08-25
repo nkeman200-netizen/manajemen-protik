@@ -6,132 +6,142 @@ use App\Models\Division;
 use App\Models\Document;
 use App\Models\Event;
 use App\Models\Finance;
-use App\Models\Meeting;
-use App\Models\MeetingAttendance;
 use App\Models\User;
-use App\Models\Warning;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Hash;
+use Spatie\Permission\Models\Role;
 
 class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
-        // 1. Roles
-        $this->call(RolePermissionSeeder::class);
+        // 1. CLEAR CACHE & SETUP ROLES
+        app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
+        Role::firstOrCreate(['name' => 'admin', 'guard_name' => 'web']);
+        Role::firstOrCreate(['name' => 'member', 'guard_name' => 'web']);
+        Role::firstOrCreate(['name' => 'advisor', 'guard_name' => 'web']);
 
-        // 2. Divisi
-        $divisions = collect(['BPH', 'Pendidikan', 'Ristek', 'Humas', 'Ekraf'])
-            ->map(fn (string $name) => Division::create(['name' => $name]));
+        // 2. SETUP DIVISIONS
+        $divisionNames = [
+            'BPH', 'Divisi Web', 'Divisi Mobile', 'Divisi UI/UX', 
+            'Divisi DevOps', 'Divisi Data', 'Divisi Humas', 'Divisi Kominfo'
+        ];
+        foreach ($divisionNames as $name) {
+            Division::firstOrCreate(['name' => $name]);
+        }
 
-        $divisionBph    = $divisions->firstWhere('name', 'BPH');
-        $divisionRistek = $divisions->firstWhere('name', 'Ristek');
+        // 3. SETUP USERS (SINGLE SOURCE OF TRUTH DARI PDF STO)
+        $usersData = [
+            // PEMBINA
+            ['name' => 'Rahmawan Bagus Trianto, S.Kom, M.Kom', 'nim' => '199112012024061001', 'phone' => '087746310727', 'prodi' => null, 'role' => 'advisor', 'div' => null, 'is_coord' => false],
+            
+            // BPH (ADMIN)
+            ['name' => 'Sofyan Yunus Rohman', 'nim' => '250102125', 'phone' => '088802457102', 'prodi' => 'TI', 'role' => 'admin', 'div' => 'BPH', 'is_coord' => false, 'pass' => '1212'],
+            ['name' => 'Raja Ubaid Fawwaz', 'nim' => '250109084', 'phone' => '085183700433', 'prodi' => 'RKS', 'role' => 'admin', 'div' => 'BPH', 'is_coord' => false],
+            ['name' => 'Almas Salsabila Fidiarti', 'nim' => '250215005', 'phone' => '085727669488', 'prodi' => 'TRPL', 'role' => 'admin', 'div' => 'BPH', 'is_coord' => false],
+            ['name' => 'Sukmaratih Nirmalasari', 'nim' => '250109059', 'phone' => '082136392612', 'prodi' => 'RKS', 'role' => 'admin', 'div' => 'BPH', 'is_coord' => false],
+            ['name' => 'Ahmad Fakhri Abdullah', 'nim' => '250215003', 'phone' => '089602469511', 'prodi' => 'TRPL', 'role' => 'admin', 'div' => 'BPH', 'is_coord' => false],
+            ['name' => 'Dea Ameliana Saputri', 'nim' => '250215011', 'phone' => '085777269126', 'prodi' => 'TRPL', 'role' => 'admin', 'div' => 'BPH', 'is_coord' => false],
 
-        // 3. User Statis
-        $admin = User::factory()->create([
-            'name'        => 'Admin Sofyan',
-            'email'       => 'admin@protik.com',
-            'division_id' => $divisionBph->id,
-        ]);
-        $admin->assignRole('admin');
+            // KOORDINATOR DIVISI (MEMBER)
+            ['name' => 'Afif Nur Faizin', 'nim' => '250215002', 'phone' => '0895384922113', 'prodi' => 'TRPL', 'role' => 'member', 'div' => 'Divisi Web', 'is_coord' => true],
+            ['name' => 'Bintang Fajar Jolya Anggara', 'nim' => '250315037', 'phone' => '085173384560', 'prodi' => 'TRPL', 'role' => 'member', 'div' => 'Divisi Mobile', 'is_coord' => true],
+            ['name' => 'Lussy Ana Syarif', 'nim' => '250202019', 'phone' => '088237169266', 'prodi' => 'TI', 'role' => 'member', 'div' => 'Divisi UI/UX', 'is_coord' => true],
+            ['name' => 'Ari Dwi Saputra', 'nim' => '250109064', 'phone' => '085869592005', 'prodi' => 'RKS', 'role' => 'member', 'div' => 'Divisi DevOps', 'is_coord' => true],
+            ['name' => 'Igo Ilham Ramadhan', 'nim' => '250102016', 'phone' => '088802660915', 'prodi' => 'TI', 'role' => 'member', 'div' => 'Divisi Data', 'is_coord' => true],
+            ['name' => 'Rahmawati', 'nim' => '250102123', 'phone' => '0882008288696', 'prodi' => 'TI', 'role' => 'member', 'div' => 'Divisi Humas', 'is_coord' => true],
+            ['name' => 'Kayla Radifan Pramudya', 'nim' => '250209079', 'phone' => '085974088420', 'prodi' => 'RKS', 'role' => 'member', 'div' => 'Divisi Kominfo', 'is_coord' => true],
 
-        $member = User::factory()->create([
-            'name'        => 'Member User',
-            'email'       => 'member@protik.com',
-            'division_id' => $divisionRistek->id,
-        ]);
-        $member->assignRole('member');
+            // ANGGOTA DIVISI (MEMBER)
+            ['name' => 'Bagus Daffa Albany', 'nim' => '250102100', 'phone' => '082134059578', 'prodi' => 'TI', 'role' => 'member', 'div' => 'Divisi Web', 'is_coord' => false],
+            ['name' => 'Assyifa Saisarita', 'nim' => '250302005', 'phone' => '0816652097', 'prodi' => 'TI', 'role' => 'member', 'div' => 'Divisi Web', 'is_coord' => false],
+            ['name' => 'Bhadra Nur Rouf Rudin', 'nim' => '250202038', 'phone' => '081325326819', 'prodi' => 'TI', 'role' => 'member', 'div' => 'Divisi Mobile', 'is_coord' => false],
+            ['name' => 'Hazel Ransy Krishna', 'nim' => '250315018', 'phone' => '089677500703', 'prodi' => 'TRPL', 'role' => 'member', 'div' => 'Divisi Mobile', 'is_coord' => false],
+            ['name' => 'Galuh Dwi Putra', 'nim' => '250215015', 'phone' => '082133598541', 'prodi' => 'TRPL', 'role' => 'member', 'div' => 'Divisi UI/UX', 'is_coord' => false],
+            ['name' => 'Wanda Tiara Levina', 'nim' => '250215063', 'phone' => '088238162248', 'prodi' => 'TRPL', 'role' => 'member', 'div' => 'Divisi UI/UX', 'is_coord' => false],
+            ['name' => 'Faathimah Annaafi\'ah', 'nim' => '250202011', 'phone' => '081225373339', 'prodi' => 'TI', 'role' => 'member', 'div' => 'Divisi UI/UX', 'is_coord' => false],
+            ['name' => 'Ade Ariansyah Anggoro', 'nim' => '250315034', 'phone' => '082136552823', 'prodi' => 'TRPL', 'role' => 'member', 'div' => 'Divisi DevOps', 'is_coord' => false],
+            ['name' => 'Nafisa Raihana', 'nim' => '250109053', 'phone' => '085942102402', 'prodi' => 'RKS', 'role' => 'member', 'div' => 'Divisi DevOps', 'is_coord' => false],
+            ['name' => 'Hikmal', 'nim' => '240109076', 'phone' => '087797365066', 'prodi' => 'RKS', 'role' => 'member', 'div' => 'Divisi DevOps', 'is_coord' => false],
+            ['name' => 'Raihan Afdhal Athallah', 'nim' => '250202027', 'phone' => '081464435647', 'prodi' => 'TI', 'role' => 'member', 'div' => 'Divisi Data', 'is_coord' => false],
+            ['name' => 'Gendhis Yuwita Sari', 'nim' => '250202014', 'phone' => '085951400581', 'prodi' => 'TI', 'role' => 'member', 'div' => 'Divisi Data', 'is_coord' => false],
+            ['name' => 'Rizqi Radhityanto', 'nim' => '250215060', 'phone' => '08813992163', 'prodi' => 'TRPL', 'role' => 'member', 'div' => 'Divisi Humas', 'is_coord' => false],
+            ['name' => 'Nabila Islami Cinta Widianti', 'nim' => '250202117', 'phone' => '085166481629', 'prodi' => 'TI', 'role' => 'member', 'div' => 'Divisi Humas', 'is_coord' => false],
+            ['name' => 'Rindang Permatasari', 'nim' => '250110024', 'phone' => '085641559302', 'prodi' => 'ALKS', 'role' => 'member', 'div' => 'Divisi Kominfo', 'is_coord' => false],
+            ['name' => 'Ayla Azzura Putri Mulianingrum', 'nim' => '250215008', 'phone' => '089609904487', 'prodi' => 'TRPL', 'role' => 'member', 'div' => 'Divisi Kominfo', 'is_coord' => false],
+        ];
 
-        $advisor = User::factory()->create([
-            'name'        => 'Advisor User',
-            'email'       => 'advisor@protik.com',
-            'division_id' => null,
-        ]);
-        $advisor->assignRole('advisor');
+        $adminSofyanId = null;
 
-        // 4. 20 User Acak (member)
-        $randomMembers = User::factory()->count(20)->create([
-            'division_id' => fn () => $divisions->random()->id,
-        ]);
-        $randomMembers->each(fn (User $u) => $u->assignRole('member'));
+        foreach ($usersData as $u) {
+            $firstName = strtolower(explode(' ', trim($u['name']))[0]);
+            $firstName = preg_replace('/[^a-z]/', '', $firstName);
+            // Handling nama "Faathimah" agar emailnya tidak aneh
+            if ($firstName === 'faathimah') {
+                $firstName = 'faathimah';
+            }
+            $email    = $firstName . '@protik.com';
+            $divId    = $u['div'] ? Division::where('name', $u['div'])->first()->id : null;
+            $password = isset($u['pass']) ? $u['pass'] : $u['nim'];
 
-        // Kumpulkan semua member untuk attendance
-        $allMembers = collect([$member])->merge($randomMembers);
+            $user = User::create([
+                'name'           => $u['name'],
+                'email'          => $email,
+                'nim'            => $u['nim'],
+                'phone'          => $u['phone'],
+                'prodi'          => $u['prodi'],
+                'division_id'    => $divId,
+                'is_coordinator' => $u['is_coord'],
+                'password'       => Hash::make($password),
+                'status'         => 'active',
+            ]);
 
-        // 5. 5 Event
-        $events = Event::factory()->count(5)->create();
+            $user->assignRole($u['role']);
 
-        // 6. Finance per Event (1 income besar, 1 expense kecil)
-        $fundingSources = ['IOM', 'DIPA', 'KAS', 'SPONSOR'];
+            if ($u['name'] === 'Sofyan Yunus Rohman') {
+                $adminSofyanId = $user->id;
+            }
+        }
 
-        $events->each(function (Event $event) use ($admin, $fundingSources) {
-            $incomeAmount = fake()->randomFloat(2, 5_000_000, 50_000_000);
+        // 4. SETUP EVENT: MAKRAB PROTIC 2026
+        if ($adminSofyanId) {
+            $makrab = Event::create([
+                'name'              => 'Makrab Protic 2026',
+                'budget_approved'   => 769000.00,
+                'start_date'        => '2026-12-11',
+                'end_date'          => '2026-12-12',
+                'document_sync_url' => 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQvJV5TM2D0ujaKNSKT6N5MewF8UHs3b5VT7fPKkbzvQrmSdtlu5LQfmWObpOJkjVgQC_slcKiRUK0_/pub?gid=1458019832&single=true&output=csv',
+                'finance_sync_url'  => 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQvJV5TM2D0ujaKNSKT6N5MewF8UHs3b5VT7fPKkbzvQrmSdtlu5LQfmWObpOJkjVgQC_slcKiRUK0_/pub?gid=1948428631&single=true&output=csv',
+            ]);
+
             Finance::create([
-                'user_id'        => $admin->id,
-                'event_id'       => $event->id,
+                'user_id'        => $adminSofyanId,
+                'event_id'       => $makrab->id,
                 'type'           => 'income',
-                'funding_source' => fake()->randomElement($fundingSources),
-                'title'          => "Dana masuk untuk {$event->name}",
+                'category'       => 'Saldo Awal',
+                'title'          => 'Dana IOM Cair',
+                'description'    => 'Dana IOM Cair',
+                'funding_source' => 'IOM',
+                'pic'            => 'Fakhri',
+                'payment_method' => 'Cash',
                 'qty'            => 1,
-                'unit'           => 'Ls',
-                'unit_price'     => $incomeAmount,
-                'amount'         => $incomeAmount,
-                'notes'          => 'Penerimaan dana kas',
-                'date'           => $event->start_date?->format('Y-m-d') ?? now()->toDateString(),
+                'unit'           => 'Paket',
+                'unit_price'     => 669000.00,
+                'amount'         => 669000.00,
+                'receipt_url'    => 'https://docs.google.com/document/u/0/d/1Bb8lkrxJJ7YwoqmX-gw2B7RvrPhF2pIh/edit',
+                'date'           => '2026-08-22',
             ]);
 
-            $expenseAmount = fake()->randomFloat(2, 100_000, 2_000_000);
-            Finance::create([
-                'user_id'        => $admin->id,
-                'event_id'       => $event->id,
-                'type'           => 'expense',
-                'funding_source' => null,
-                'title'          => "Pengeluaran operasional {$event->name}",
-                'qty'            => 1,
-                'unit'           => 'Ls',
-                'unit_price'     => $expenseAmount,
-                'amount'         => $expenseAmount,
-                'notes'          => 'Pengeluaran operasional kegiatan',
-                'date'           => $event->start_date?->copy()->addDays(1)?->format('Y-m-d') ?? now()->toDateString(),
+            Document::create([
+                'created_by'    => $adminSofyanId,
+                'event_id'      => $makrab->id,
+                'letter_number' => '178/PM/PROTIC/VIII/2027',
+                'title'         => 'Surat Peminjaman Vila',
+                'letter_link'   => 'https://drive.google.com/open?id=1m8Hrq7MmJ0tDAlOaWSaD5naqcBZNH9uG',
+                'scan_link'     => 'https://drive.google.com/open?id=1WnKetLMYji-HsvbaCLGeqIj_zULiStgq',
+                'activity_date' => '2026-12-11',
+                'created_at'    => '2026-08-22 20:42:58',
             ]);
-        });
-
-        // 7. 10 Meeting
-        $meetings = Meeting::factory()->count(10)->create();
-
-        // 8. Attendance setiap Meeting untuk semua member
-        $statuses = ['present', 'permit', 'sick', 'absent'];
-
-        $meetings->each(function (Meeting $meeting) use ($allMembers, $statuses) {
-            $allMembers->each(function (User $member) use ($meeting, $statuses) {
-                MeetingAttendance::create([
-                    'meeting_id' => $meeting->id,
-                    'user_id'    => $member->id,
-                    'status'     => fake()->randomElement($statuses),
-                    'proof_url'  => fake()->optional(0.3)->url(),
-                ]);
-            });
-        });
-
-        // 9. 15 Document
-        Document::factory()->count(15)->create([
-            'created_by' => $admin->id,
-            'event_id'   => fn () => $events->random()->id,
-        ]);
-
-        // 10. 3 Warning
-        $warnedUsers = $allMembers->random(3);
-        $warnedUsers->each(function (User $user) use ($admin) {
-            Warning::create([
-                'user_id'  => $user->id,
-                'admin_id' => $admin->id,
-                'reason'   => fake()->randomElement([
-                    'Tidak hadir 3 kali berturut-turut tanpa keterangan.',
-                    'Melanggar tata tertib organisasi.',
-                    'Tidak menyelesaikan tugas yang diberikan.',
-                    'Terlambat mengumpulkan laporan kegiatan.',
-                ]),
-                'date' => fake()->dateTimeBetween('-1 month', 'now')->format('Y-m-d'),
-            ]);
-        });
+        }
     }
 }

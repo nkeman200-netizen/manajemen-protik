@@ -12,13 +12,14 @@ class User extends Authenticatable {
 
     protected $fillable = [
         'name', 'email', 'password', 'status', 'division_id',
-        'nim', 'phone', 'prodi', 'angkatan', 'address'
+        'is_coordinator', 'nim', 'phone', 'prodi', 'angkatan', 'address'
     ];
 
     protected $hidden = ['password', 'remember_token'];
 
     protected $casts = [
-        'password' => 'hashed',
+        'password'       => 'hashed',
+        'is_coordinator' => 'boolean',
     ];
 
     public function division(): BelongsTo {
