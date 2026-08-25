@@ -245,3 +245,6 @@ Sebagai penutup sesi dan peresmian rilis versi 1.0.0, simpan pencapaianmu ke dal
 ### Changed
 - Merefaktorisasi algoritma *Cloud Sync Engine* pada `SyncService.php` (Modul Keuangan) dari strategi destruktif *Wipe & Reload* menjadi *Smart Composite Key Upsert* (`firstOrNew`). Evaluasi *Null Coalescing* (`??`) diterapkan untuk melindungi data parsial (PIC, Kategori, Sumber Dana) yang diinput melalui antarmuka web agar tidak tertimpa oleh sel kosong dari Spreadsheet.
 - Mencabut limitasi skema Paginasi (15 baris) pada `UserController.php` (Modul Master Data). Data pengguna kini diekstraksi secara komprehensif (`get()`) dalam satu muatan JSON untuk memfasilitasi visibilitas hierarki pengurus secara utuh tanpa hambatan UX dari fitur tombol *Next/Prev*.
+## [2026-08-25]
+### Fixed
+- Menyelesaikan anomali *Timezone Shift* (+7 Jam offset) yang mendistorsi validitas tampilan waktu kalender dan agenda di *Frontend*. Melakukan standardisasi variabel `'timezone'` pada `config/app.php` dari `UTC` menjadi `Asia/Jakarta` guna menyelaraskan komputasi waktu *Backend* (MySQL & Carbon) dengan interpretasi *Client-Side*.
