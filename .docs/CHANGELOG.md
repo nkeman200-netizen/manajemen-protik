@@ -257,3 +257,6 @@ Sebagai penutup sesi dan peresmian rilis versi 1.0.0, simpan pencapaianmu ke dal
 - Memperluas *Payload State* pada `EventModal.jsx` di *Frontend* dengan tata letak *3-Column Grid* untuk mengakomodasi konfigurasi URL Agenda.
 ### Fixed
 - Menambal anomali *Data Bleeding* pada `AgendaController@sync` yang sebelumnya secara buta menarik *Global URL* BPH Pusat untuk setiap ruang kerja. *Endpoint* kini ditenagai oleh arsitektur *Context-Aware Routing* yang memvalidasi *Event ID* dan menyasar URL eksternal yang spesifik untuk tiap kepanitiaan.
+## [2026-08-26]
+### Fixed
+- Menyelaraskan arsitektur *Relative Month Indexing* antara *Frontend* dan *Backend* (pada `DashboardService@calculateActiveMonthsPassed`). Memperbaiki kalkulasi distorsi peringatan tunggakan kas pada periode transisi organisasi (Juli - September) dengan menginisialisasi parameter operasional menjadi `0` tagihan berjalan. Notifikasi agregasi beban hutang (seperti `8 bulan`) pada antarmuka Dasbor Utama kini beroperasi sinkron dan akurat dengan realitas periode kepengurusan.

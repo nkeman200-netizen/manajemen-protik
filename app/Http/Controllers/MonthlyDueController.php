@@ -16,7 +16,8 @@ class MonthlyDueController extends Controller
     {
         // Mengembalikan struktur untuk Heatmap Frontend
         // PENGECUALIAN: Sembunyikan role 'advisor' dari tabel tagihan kas
-        $users = User::with('roles')
+        // INJEKSI: Tambahkan 'division' ke Eager Loading untuk kebutuhan Filter/UI Frontend
+        $users = User::with(['roles', 'division'])
             ->whereDoesntHave('roles', fn($q) => $q->where('name', 'advisor'))
             ->get();
             

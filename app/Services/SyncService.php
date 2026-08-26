@@ -25,11 +25,6 @@ class SyncService
         return array_map('str_getcsv', explode("\n", $csvData));
     }
 
-    /**
-     * INTELLIGENT COLUMN HUNTER
-     * Mencari index array secara case-insensitive berdasarkan kata kunci.
-     * Sangat aman dari bug Index 0 dan sangat fleksibel terhadap perubahan nama kolom.
-     */
     private function findColIndex(array $header, array $keywords): int|false
     {
         foreach ($header as $index => $colName) {
@@ -228,16 +223,19 @@ class SyncService
                     'event_id'      => $eventId ? (int)$eventId : null,
                 ]);
 
-                $doc->title         = $perihal ?? $doc->title ?? 'Tanpa Judul';
+                $doc->title = $perihal ?? $doc->title ?? 'Tanpa Judul';
                 
                 $linkSuratVal = $this->extractVal($row, $idx['linkSurat']);
-                $doc->letter_link   = ($linkSuratVal && filter_var($linkSuratVal, FILTER_VALIDATE_URL)) ? $linkSuratVal : $doc->letter_link;
+                $doc->letter_link = ($linkSuratVal && filter_var($linkSuratVal, FILTER_VALIDATE_URL)) ? $linkSuratVal : $doc->letter_link;
                 
                 $linkScanVal = $this->extractVal($row, $idx['linkScan']);
-                $doc->scan_link     = ($linkScanVal && filter_var($linkScanVal, FILTER_VALIDATE_URL)) ? $linkScanVal : $doc->scan_link;
+                $doc->scan_link = ($linkScanVal && filter_var($linkScanVal, FILTER_VALIDATE_URL)) ? $linkScanVal : $doc->scan_link;
                 
-                $doc->activity_date = $parseDate($this->extractVal($row, $idx['tglKegiatan'])) ?? $doc->activity_date;
-                $doc->created_by    = $doc->exists ? $doc->created_by : $userId;
+                // NULLIFIER CORRECTION: 
+                // Cabut Smart Upsert (?? $doc->activity_date). Paksa menjadi NULL jika di Spreadsheet kosong!
+                $doc->activity_date = $parseDate($this->extractVal($row, $idx['tglKegiatan']));
+                
+                $doc->created_by = $doc->exists ? $doc->created_by : $userId;
 
                 $doc->timestamps = false;
                 $doc->created_at = $tglBuat . ' 00:00:00';
@@ -269,7 +267,7 @@ class SyncService
         if (empty($header)) throw new Exception('Format Header Keuangan tidak ditemukan.');
 
         $idx = [
-            'tgl'      => $this->findColIndex($header, ['tanggal', 'tanggal', 'tgl']),
+            'tgl'      => $this->findColIndex($header, ['tanggal (yyyy-mm-dd)', 'tanggal', 'tgl']),
             'tipe'     => $this->findColIndex($header, ['tipe', 'jenis']),
             'rincian'  => $this->findColIndex($header, ['rincian', 'deskripsi', 'item']),
             'kategori' => $this->findColIndex($header, ['kategori', 'kelompok']),
