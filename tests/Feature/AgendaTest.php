@@ -82,4 +82,19 @@ class AgendaTest extends TestCase
             'target_value' => '1',
         ]);
     }
+
+    public function test_sync_fails_when_event_agenda_sync_url_is_missing(): void
+    {
+        $event = Event::factory()->create([
+            'agenda_sync_url' => null,
+        ]);
+
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->postJson('/api/agendas/sync', ['event_id' => $event->id]);
+
+        $response->assertStatus(400);
+        $response->assertJsonFragment([
+            'message' => 'URL Sinkronisasi Agenda untuk Event ini belum diatur.',
+        ]);
+    }
 }

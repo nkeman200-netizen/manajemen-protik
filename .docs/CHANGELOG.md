@@ -251,3 +251,9 @@ Sebagai penutup sesi dan peresmian rilis versi 1.0.0, simpan pencapaianmu ke dal
 ## [2026-08-25]
 ### Changed
 - Merefaktorisasi `SyncService.php` dengan merestorasi algoritma *Intelligent Column Hunter* (`findColIndex`) setelah melakukan evaluasi *Trade-off Big-O Notation* (memori vs fleksibilitas). Matriks pencarian kini menyertakan kombinasi *Primary Exact Match* (seperti `tanggal (yyyy-mm-dd)`, `pj/divisi`) dari *Spreadsheet* produksi dan *Secondary Fallback Match* (seperti `pic`, `tgl`). Arsitektur ini mengeleminasi kerapuhan sistem terhadap modifikasi *header* Excel sembari mempertahankan kapabilitas *Smart Upsert*.
+## [2026-08-26]
+### Added
+- Menginjeksi *Migration* baru untuk menambahkan atribut `agenda_sync_url` pada entitas `events`, melengkapi trilogi integrasi *Cloud Sync* kepanitiaan (Agenda, Dokumen, Keuangan).
+- Memperluas *Payload State* pada `EventModal.jsx` di *Frontend* dengan tata letak *3-Column Grid* untuk mengakomodasi konfigurasi URL Agenda.
+### Fixed
+- Menambal anomali *Data Bleeding* pada `AgendaController@sync` yang sebelumnya secara buta menarik *Global URL* BPH Pusat untuk setiap ruang kerja. *Endpoint* kini ditenagai oleh arsitektur *Context-Aware Routing* yang memvalidasi *Event ID* dan menyasar URL eksternal yang spesifik untuk tiap kepanitiaan.

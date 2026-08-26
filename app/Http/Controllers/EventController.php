@@ -33,6 +33,7 @@ class EventController extends Controller
             'drive_folder_url'  => ['nullable', 'string', 'max:255'],
             'document_sync_url' => ['nullable', 'string', 'max:255'],
             'finance_sync_url'  => ['nullable', 'string', 'max:255'],
+            'agenda_sync_url'   => ['nullable', 'string', 'max:255'],
             'start_date'        => ['required', 'date'],
             'end_date'          => ['nullable', 'date', 'after_or_equal:start_date'],
         ]);
@@ -54,6 +55,7 @@ class EventController extends Controller
             'drive_folder_url'  => ['nullable', 'string', 'max:255'],
             'document_sync_url' => ['nullable', 'string', 'max:255'],
             'finance_sync_url'  => ['nullable', 'string', 'max:255'],
+            'agenda_sync_url'   => ['nullable', 'string', 'max:255'],
             'start_date'        => ['required', 'date'],
             'end_date'          => ['nullable', 'date', 'after_or_equal:start_date'],
         ]);

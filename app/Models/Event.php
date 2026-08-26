@@ -12,7 +12,7 @@ class Event extends Model {
     protected $fillable = [
         'name', 'description', 'budget_approved', 
         'drive_folder_url', 'start_date', 'end_date',
-        'document_sync_url', 'finance_sync_url',
+        'document_sync_url', 'finance_sync_url', 'agenda_sync_url',
     ];
 
     // Konversi presisi data otomatis

@@ -17,6 +17,7 @@ class EventResource extends JsonResource
             'drive_folder_url'  => $this->drive_folder_url,
             'document_sync_url' => $this->document_sync_url,
             'finance_sync_url'  => $this->finance_sync_url,
+            'agenda_sync_url'   => $this->agenda_sync_url,
             'start_date'        => $this->start_date?->format('Y-m-d'),
             'end_date'          => $this->end_date?->format('Y-m-d'),
             'created_at'        => $this->created_at?->toISOString(),

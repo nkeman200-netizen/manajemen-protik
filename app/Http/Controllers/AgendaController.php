@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Resources\AgendaResource;
 use App\Models\Agenda;
 use App\Models\AgendaTarget;
+use App\Models\Event;
 use App\Services\SyncService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -31,11 +32,21 @@ class AgendaController extends Controller
 
     public function sync(Request $request): JsonResponse
     {
-        $url = env('TRACKING_AGENDA_URL');
-        if (!$url) return response()->json(['message' => 'URL Sinkronisasi Agenda belum dikonfigurasi di .env'], 500);
+        $eventId = $request->input('event_id');
+
+        if ($eventId) {
+            $event = Event::find($eventId);
+            if (!$event || empty($event->agenda_sync_url)) {
+                return response()->json(['message' => 'URL Sinkronisasi Agenda untuk Event ini belum diatur.'], 400);
+            }
+            $url = $event->agenda_sync_url;
+        } else {
+            $url = env('TRACKING_AGENDA_URL');
+            if (!$url) return response()->json(['message' => 'URL Sinkronisasi Agenda BPH Pusat belum dikonfigurasi di .env'], 500);
+        }
 
         try {
-            return response()->json($this->syncService->syncAgendas($request->input('event_id'), $url));
+            return response()->json($this->syncService->syncAgendas($eventId, $url));
         } catch (\Exception $e) {
             return response()->json(['message' => 'Gagal menyinkronisasi data agenda.', 'error' => $e->getMessage()], 500);
         }
