@@ -12,13 +12,19 @@ class WarningTest extends TestCase
     use RefreshDatabase;
 
     protected User $admin;
+    protected User $member;
 
     protected function setUp(): void
     {
         parent::setUp();
         Role::firstOrCreate(['name' => 'admin', 'guard_name' => 'web']);
+        Role::firstOrCreate(['name' => 'member', 'guard_name' => 'web']);
+        
         $this->admin = User::factory()->create();
         $this->admin->assignRole('admin');
+
+        $this->member = User::factory()->create();
+        $this->member->assignRole('member');
     }
 
     public function test_can_list_warnings(): void
@@ -34,7 +40,7 @@ class WarningTest extends TestCase
         $response->assertStatus(200);
         $response->assertJsonCount(3, 'data');
         $response->assertJsonStructure([
-            'data' => [['id', 'user_id', 'admin_id', 'reason', 'date']],
+            'data' => [['id', 'user_id', 'admin_id', 'reason', 'date', 'read_at']],
             'meta' => ['current_page', 'per_page', 'total'],
         ]);
     }
@@ -63,5 +69,42 @@ class WarningTest extends TestCase
             'admin_id' => $this->admin->id,
             'reason'   => 'Tidak hadir 3 kali berturut-turut tanpa keterangan.',
         ]);
+    }
+
+    public function test_owner_can_mark_warning_as_read(): void
+    {
+        $warning = Warning::factory()->create([
+            'user_id'  => $this->member->id,
+            'admin_id' => $this->admin->id,
+            'read_at'  => null,
+        ]);
+
+        $response = $this->actingAs($this->member, 'sanctum')
+            ->patchJson("/api/warnings/{$warning->id}/read");
+
+        $response->assertStatus(200)
+            ->assertJson(['message' => 'Success']);
+
+        $this->assertNotNull($warning->fresh()->read_at);
+    }
+
+    public function test_other_user_cannot_mark_warning_as_read(): void
+    {
+        $otherUser = User::factory()->create();
+        $otherUser->assignRole('member');
+
+        $warning = Warning::factory()->create([
+            'user_id'  => $this->member->id,
+            'admin_id' => $this->admin->id,
+            'read_at'  => null,
+        ]);
+
+        $response = $this->actingAs($otherUser, 'sanctum')
+            ->patchJson("/api/warnings/{$warning->id}/read");
+
+        $response->assertStatus(403)
+            ->assertJson(['message' => 'Anda tidak berhak mengakses ini.']);
+
+        $this->assertNull($warning->fresh()->read_at);
     }
 }

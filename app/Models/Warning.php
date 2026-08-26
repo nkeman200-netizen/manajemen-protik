@@ -8,10 +8,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class Warning extends Model {
     use HasFactory;
 
-    protected $fillable = ['user_id', 'admin_id', 'reason', 'date'];
+    protected $fillable = ['user_id', 'admin_id', 'reason', 'date', 'read_at'];
 
     protected $casts = [
         'date' => 'date',
+        'read_at' => 'datetime',
     ];
 
     public function user(): BelongsTo {

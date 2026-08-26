@@ -68,4 +68,16 @@ class WarningController extends Controller
             'message' => 'Success',
         ]);
     }
+
+    public function markAsRead(Request $request, Warning $warning): JsonResponse
+    {
+        // Otorisasi: Pastikan hanya pemilik peringatan yang bisa menandai
+        if ($request->user()->id !== $warning->user_id) {
+            return response()->json(['message' => 'Anda tidak berhak mengakses ini.'], 403);
+        }
+
+        $warning->update(['read_at' => now()]);
+
+        return response()->json(['message' => 'Success']);
+    }
 }

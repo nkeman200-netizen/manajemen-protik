@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Resources\FinanceResource;
 use App\Models\Event;
 use App\Models\Finance;
+use App\Models\Setting;
 use App\Services\FinanceService;
 use App\Services\SyncService;
 use Illuminate\Http\JsonResponse;
@@ -134,8 +135,8 @@ class FinanceController extends Controller
             }
             $url = $event->finance_sync_url;
         } else {
-            $url = env('TRACKING_KEUANGAN_URL');
-            if (!$url) return response()->json(['message' => 'URL Sinkronisasi Keuangan BPH Pusat belum dikonfigurasi.'], 500);
+            $url = Setting::where('key', 'bph_finance_sync_url')->value('value');
+            if (!$url) return response()->json(['message' => 'URL Sinkronisasi Keuangan BPH Pusat belum dikonfigurasi di Pengaturan.'], 500);
         }
 
         try {

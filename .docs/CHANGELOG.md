@@ -260,3 +260,31 @@ Sebagai penutup sesi dan peresmian rilis versi 1.0.0, simpan pencapaianmu ke dal
 ## [2026-08-26]
 ### Fixed
 - Menyelaraskan arsitektur *Relative Month Indexing* antara *Frontend* dan *Backend* (pada `DashboardService@calculateActiveMonthsPassed`). Memperbaiki kalkulasi distorsi peringatan tunggakan kas pada periode transisi organisasi (Juli - September) dengan menginisialisasi parameter operasional menjadi `0` tagihan berjalan. Notifikasi agregasi beban hutang (seperti `8 bulan`) pada antarmuka Dasbor Utama kini beroperasi sinkron dan akurat dengan realitas periode kepengurusan.
+## [2026-08-26]
+### Added
+- Mengimplementasikan SDLC Fase 1 (Data Modeling) dan Fase 2 (Core Domain CRUD & TDD) untuk entitas `Setting` dan `Archive`.
+- Membuat migrasi `settings` dan `archives`, Eloquent Model `Setting` & `Archive`, serta `SettingSeeder`.
+- Mengimplementasikan `SettingController` (dengan `updateBatch` terproteksi `role:admin`) dan `ArchiveController` (Full CRUD API dengan *error handling* standar).
+- Membuat pengujian otomatis `ArchiveFeatureTest` dengan cakupan seluruh endpoint dan lulus 100%.
+## [2026-08-26]
+### Changed
+- Melakukan refaktorisasi arsitektur *Database Normalization* pada skema keanggotaan kepanitiaan Event untuk mengeleminasi ancaman *Full Table Scan* (FTS) yang menurunkan performa pada skala data yang besar. 
+- Memisahkan data tekstual jabatan menjadi tabel master mandiri (`committee_positions`) yang dilengkapi indikator otorisasi mutlak berformat boolean (`is_bph`).
+- Mengoptimasi logika filter pada middleware *Contextual Authorization* (`CheckEventBPH`) dari sebelumnya memanfaatkan fungsi `LIKE` (komputasi O(n)) menjadi evaluasi berbasis klausa *Foreign Key Relational* dan *Index Lookup* dengan performa konstan, menjamin stabilitas latensi server API secara permanen.
+## [2026-08-26]
+### Added
+- Mengimplementasikan *RESTful API Controller* (`CommitteePositionController`) untuk mengelola master data jabatan kepanitiaan Event.
+- Menerapkan arsitektur validasi *Request* yang ketat (termasuk *Unique Constraint Ignore* pada operasi Update) dan standardisasi *JSON Error Handling* (HTTP 200, 201, 404, 422, 500).
+- Melindungi *Endpoint* `/api/committee-positions` dengan enkapsulasi otorisasi tingkat tinggi (middleware `role:admin`), menjamin bahwa hanya *Administrator Global* yang memiliki wewenang untuk meregistrasi jabatan baru atau mendelegasikan hak istimewa *Contextual BPH* (`is_bph`).
+## [2026-08-26]
+### Changed
+- Mengeliminasi ketergantungan *hardcoded* pada berkas `.env` untuk manajemen *Cloud Sync Spreadsheet URLs*.
+- Merefaktorisasi `AgendaController`, `DocumentController`, `FinanceController`, dan `MonthlyDueController` untuk menavigasi rute sinkronisasi secara asinkron dari *Database Configuration* (`settings` table), menjadikan aplikasi ini sepenuhnya *SaaS-Ready* lintas periode kepengurusan.
+### Added
+- Menginjeksi *Endpoint* `POST /api/settings/logo` di dalam `SettingController` untuk mengakomodasi fungsionalitas unggah berkas (JPG/PNG/SVG) langsung ke penyimpanan server *Backend* (`storage/app/public`), meniadakan dependensi pihak ketiga (*Google Drive / Image Hosting*) serta memecahkan tantangan restriksi CORS pada rendering aset antarmuka.
+## [2026-08-27]
+### Added
+- Mengimplementasikan fitur *Read Receipt* pada modul Surat Peringatan (`warnings` table) dengan menambahkan atribut `read_at` (nullable timestamp).
+- Menginjeksi *Endpoint* `PATCH /api/warnings/{warning}/read` di `WarningController` dengan proteksi otorisasi kepemilikan data (hanya pemilik SP yang dapat menandai telah dibaca).
+- Memperluas `WarningResource` dan `Warning` Eloquent Model dengan casting `datetime` untuk serialisasi ISO8601 ke Frontend.
+- Menambahkan *Feature Test Suite* pada `WarningTest` untuk memvalidasi *happy path* dan penolakan otorisasi (HTTP 403) bagi pengguna lain (100% lulus).

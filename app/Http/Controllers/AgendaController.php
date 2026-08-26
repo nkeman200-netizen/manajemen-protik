@@ -6,6 +6,7 @@ use App\Http\Resources\AgendaResource;
 use App\Models\Agenda;
 use App\Models\AgendaTarget;
 use App\Models\Event;
+use App\Models\Setting;
 use App\Services\SyncService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -41,8 +42,8 @@ class AgendaController extends Controller
             }
             $url = $event->agenda_sync_url;
         } else {
-            $url = env('TRACKING_AGENDA_URL');
-            if (!$url) return response()->json(['message' => 'URL Sinkronisasi Agenda BPH Pusat belum dikonfigurasi di .env'], 500);
+            $url = Setting::where('key', 'bph_agenda_sync_url')->value('value');
+            if (!$url) return response()->json(['message' => 'URL Sinkronisasi Agenda BPH Pusat belum dikonfigurasi di Pengaturan.'], 500);
         }
 
         try {

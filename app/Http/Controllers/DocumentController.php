@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Resources\DocumentResource;
 use App\Models\Document;
 use App\Models\Event;
+use App\Models\Setting;
 use App\Services\SyncService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -92,8 +93,8 @@ class DocumentController extends Controller
             }
             $url = $event->document_sync_url;
         } else {
-            $url = env('TRACKING_PERSURATAN_URL');
-            if (!$url) return response()->json(['message' => 'URL Sinkronisasi Dokumen BPH Pusat belum dikonfigurasi.'], 500);
+            $url = Setting::where('key', 'bph_document_sync_url')->value('value');
+            if (!$url) return response()->json(['message' => 'URL Sinkronisasi Dokumen BPH Pusat belum dikonfigurasi di Pengaturan.'], 500);
         }
 
         try {

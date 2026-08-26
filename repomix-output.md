@@ -44,8 +44,10 @@ app/
     Controllers/
       AgendaAttendanceController.php
       AgendaController.php
+      ArchiveController.php
       AuditTrailController.php
       AuthController.php
+      CommitteePositionController.php
       Controller.php
       DashboardController.php
       DivisionController.php
@@ -56,8 +58,11 @@ app/
       MonthlyDueController.php
       ProfileController.php
       RoleController.php
+      SettingController.php
       UserController.php
       WarningController.php
+    Middleware/
+      CheckEventBPH.php
     Resources/
       AgendaResource.php
       DocumentResource.php
@@ -71,13 +76,16 @@ app/
     Agenda.php
     AgendaAttendance.php
     AgendaTarget.php
+    Archive.php
     AuditTrail.php
+    CommitteePosition.php
     Division.php
     Document.php
     Event.php
     EventCommittee.php
     Finance.php
     MonthlyDue.php
+    Setting.php
     User.php
     Warning.php
   Observers/
@@ -87,6 +95,7 @@ app/
   Services/
     DashboardService.php
     FinanceService.php
+    SyncService.php
 bootstrap/
   cache/
     .gitignore
@@ -141,9 +150,16 @@ database/
     2026_08_23_211700_add_is_coordinator_to_users_table.php
     2026_08_23_211701_create_agenda_targets_table.php
     2026_08_25_123800_add_soft_deletes_to_core_tables.php
+    2026_08_26_071900_add_agenda_sync_url_to_events_table.php
+    2026_08_26_171300_create_settings_table.php
+    2026_08_26_171301_create_archives_table.php
+    2026_08_26_172700_create_committee_positions_table.php
+    2026_08_26_172701_alter_event_committees_add_position_id.php
   seeders/
+    CommitteePositionSeeder.php
     DatabaseSeeder.php
     RolePermissionSeeder.php
+    SettingSeeder.php
   .gitignore
 public/
   .htaccess
@@ -186,7 +202,10 @@ tests/
   Feature/
     AgendaAttendanceTest.php
     AgendaTest.php
+    ArchiveFeatureTest.php
     AuditTrailTest.php
+    CheckEventBPHTest.php
+    CommitteePositionFeatureTest.php
     DashboardTest.php
     DocumentTest.php
     ExampleTest.php
@@ -211,12 +230,926 @@ deploy.sh
 package.json
 phpunit.xml
 README.md
-setActiveChartTab(key)}
-setTimeRange(e.target.value)}
 vite.config.js
 ````
 
 # Files
+
+## File: app/Http/Controllers/ArchiveController.php
+````php
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\Archive;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Exception;
+
+class ArchiveController extends Controller
+{
+    public function index(): JsonResponse
+    {
+        try {
+            $archives = Archive::orderBy('period_year', 'desc')->orderBy('created_at', 'desc')->get();
+            return response()->json(['success' => true, 'data' => $archives], 200);
+        } catch (Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Server Error'], 500);
+        }
+    }
+
+    public function store(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'period_year' => 'required|string|max:50',
+            'name'        => 'required|string|max:255',
+            'drive_url'   => 'required|url',
+        ]);
+
+        try {
+            $archive = Archive::create($validated);
+            return response()->json(['success' => true, 'data' => $archive, 'message' => 'Arsip dibuat.'], 201);
+        } catch (Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Gagal membuat arsip.'], 500);
+        }
+    }
+
+    public function update(Request $request, $id): JsonResponse
+    {
+        $archive = Archive::find($id);
+        if (!$archive) return response()->json(['success' => false, 'message' => 'Data tidak ditemukan.'], 404);
+
+        $validated = $request->validate([
+            'period_year' => 'sometimes|required|string|max:50',
+            'name'        => 'sometimes|required|string|max:255',
+            'drive_url'   => 'sometimes|required|url',
+        ]);
+
+        try {
+            $archive->update($validated);
+            return response()->json(['success' => true, 'data' => $archive, 'message' => 'Arsip diperbarui.'], 200);
+        } catch (Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Gagal memperbarui.'], 500);
+        }
+    }
+
+    public function destroy($id): JsonResponse
+    {
+        $archive = Archive::find($id);
+        if (!$archive) return response()->json(['success' => false, 'message' => 'Data tidak ditemukan.'], 404);
+
+        try {
+            $archive->delete();
+            return response()->json(['success' => true, 'message' => 'Arsip dihapus.'], 200);
+        } catch (Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Gagal menghapus.'], 500);
+        }
+    }
+}
+````
+
+## File: app/Http/Controllers/CommitteePositionController.php
+````php
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\CommitteePosition;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Exception;
+use Illuminate\Validation\Rule;
+
+class CommitteePositionController extends Controller
+{
+    /**
+     * Menampilkan daftar semua jabatan kepanitiaan.
+     */
+    public function index(): JsonResponse
+    {
+        try {
+            $positions = CommitteePosition::orderBy('name', 'asc')->get();
+            return response()->json([
+                'success' => true,
+                'data'    => $positions
+            ], 200);
+        } catch (Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal memuat data jabatan kepanitiaan.'
+            ], 500);
+        }
+    }
+
+    /**
+     * Menyimpan jabatan baru ke database.
+     */
+    public function store(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'name'   => 'required|string|max:255|unique:committee_positions,name',
+            'is_bph' => 'required|boolean',
+        ]);
+
+        try {
+            $position = CommitteePosition::create($validated);
+            return response()->json([
+                'success' => true,
+                'data'    => $position,
+                'message' => 'Jabatan kepanitiaan berhasil ditambahkan.'
+            ], 201);
+        } catch (Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Terjadi kesalahan saat menyimpan data.'
+            ], 500);
+        }
+    }
+
+    /**
+     * Memperbarui data jabatan spesifik.
+     */
+    public function update(Request $request, $id): JsonResponse
+    {
+        $position = CommitteePosition::find($id);
+
+        if (!$position) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Data jabatan tidak ditemukan.'
+            ], 404);
+        }
+
+        $validated = $request->validate([
+            'name' => [
+                'required',
+                'string',
+                'max:255',
+                Rule::unique('committee_positions')->ignore($position->id),
+            ],
+            'is_bph' => 'required|boolean',
+        ]);
+
+        try {
+            $position->update($validated);
+            return response()->json([
+                'success' => true,
+                'data'    => $position,
+                'message' => 'Data jabatan berhasil diperbarui.'
+            ], 200);
+        } catch (Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Terjadi kesalahan saat memperbarui data.'
+            ], 500);
+        }
+    }
+
+    /**
+     * Menghapus jabatan dari database.
+     */
+    public function destroy($id): JsonResponse
+    {
+        $position = CommitteePosition::find($id);
+
+        if (!$position) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Data jabatan tidak ditemukan.'
+            ], 404);
+        }
+
+        try {
+            $position->delete();
+            return response()->json([
+                'success' => true,
+                'message' => 'Data jabatan berhasil dihapus.'
+            ], 200);
+        } catch (Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Terjadi kesalahan saat menghapus data.'
+            ], 500);
+        }
+    }
+}
+````
+
+## File: app/Http/Controllers/SettingController.php
+````php
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\Setting;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Exception;
+
+class SettingController extends Controller
+{
+    public function index(): JsonResponse
+    {
+        try {
+            $settings = Setting::all()->pluck('value', 'key');
+            return response()->json(['success' => true, 'data' => $settings], 200);
+        } catch (Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Gagal memuat pengaturan.'], 500);
+        }
+    }
+
+    public function updateBatch(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'settings'         => 'required|array',
+            'settings.*.key'   => 'required|string|exists:settings,key',
+            'settings.*.value' => 'nullable|string',
+        ]);
+
+        try {
+            foreach ($validated['settings'] as $settingData) {
+                Setting::where('key', $settingData['key'])->update(['value' => $settingData['value']]);
+            }
+            return response()->json(['success' => true, 'message' => 'Pengaturan berhasil diperbarui.'], 200);
+        } catch (Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Gagal memperbarui pengaturan.'], 500);
+        }
+    }
+}
+````
+
+## File: app/Http/Middleware/CheckEventBPH.php
+````php
+<?php
+
+namespace App\Http\Middleware;
+
+use Closure;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Symfony\Component\HttpFoundation\Response;
+use App\Models\EventCommittee;
+
+class CheckEventBPH
+{
+    public function handle(Request $request, Closure $next): Response
+    {
+        $user = $request->user();
+
+        if ($user && $user->hasRole('admin')) {
+            return $next($request);
+        }
+
+        $eventId = $request->route('event') ?? $request->input('event_id');
+        $eventId = is_object($eventId) ? $eventId->id : $eventId;
+
+        if (!$eventId) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Akses ditolak. Konteks Event ID tidak ditemukan.'
+            ], 403);
+        }
+
+        // Kueri teroptimasi berkat Indexing dan Foreign Key (Tanpa operasi LIKE)
+        $isBph = EventCommittee::where('event_id', $eventId)
+            ->where('user_id', $user->id)
+            ->whereHas('position', function($query) {
+                $query->where('is_bph', true); // Mengecek flag boolean (Sangat Cepat)
+            })
+            ->exists();
+
+        if ($isBph) {
+            return $next($request);
+        }
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Akses ditolak. Anda tidak memiliki wewenang BPH pada Event ini.'
+        ], 403);
+    }
+}
+````
+
+## File: app/Models/Archive.php
+````php
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+
+class Archive extends Model
+{
+    use HasFactory;
+
+    protected $fillable = ['period_year', 'name', 'drive_url'];
+}
+````
+
+## File: app/Models/CommitteePosition.php
+````php
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+
+class CommitteePosition extends Model
+{
+    use HasFactory;
+
+    protected $fillable = ['name', 'is_bph'];
+
+    protected $casts = [
+        'is_bph' => 'boolean',
+    ];
+
+    public function eventCommittees(): HasMany
+    {
+        return $this->hasMany(EventCommittee::class, 'position_id');
+    }
+}
+````
+
+## File: app/Models/Setting.php
+````php
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+
+class Setting extends Model
+{
+    use HasFactory;
+
+    protected $fillable = ['key', 'value', 'type', 'description'];
+}
+````
+
+## File: database/migrations/2026_08_26_171300_create_settings_table.php
+````php
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::create('settings', function (Blueprint $table) {
+            $table->id();
+            $table->string('key')->unique();
+            $table->text('value')->nullable();
+            $table->string('type')->default('string'); // string, file, boolean
+            $table->string('description')->nullable();
+            $table->timestamps();
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('settings');
+    }
+};
+````
+
+## File: database/migrations/2026_08_26_171301_create_archives_table.php
+````php
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::create('archives', function (Blueprint $table) {
+            $table->id();
+            $table->string('period_year');
+            $table->string('name');
+            $table->text('drive_url');
+            $table->timestamps();
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('archives');
+    }
+};
+````
+
+## File: database/migrations/2026_08_26_172700_create_committee_positions_table.php
+````php
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::create('committee_positions', function (Blueprint $table) {
+            $table->id();
+            $table->string('name')->unique();
+            $table->boolean('is_bph')->default(false)->index(); // INDEXED untuk pencarian O(log n)
+            $table->timestamps();
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('committee_positions');
+    }
+};
+````
+
+## File: database/migrations/2026_08_26_172701_alter_event_committees_add_position_id.php
+````php
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::table('event_committees', function (Blueprint $table) {
+            // Hapus kolom string lama jika ada
+            if (Schema::hasColumn('event_committees', 'position')) {
+                $table->dropColumn('position');
+            }
+            
+            // Tambahkan Foreign Key baru
+            $table->foreignId('position_id')
+                  ->after('user_id')
+                  ->nullable()
+                  ->constrained('committee_positions')
+                  ->nullOnDelete();
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::table('event_committees', function (Blueprint $table) {
+            $table->dropConstrainedForeignId('position_id');
+            $table->string('position')->nullable();
+        });
+    }
+};
+````
+
+## File: database/seeders/CommitteePositionSeeder.php
+````php
+<?php
+
+namespace Database\Seeders;
+
+use Illuminate\Database\Seeder;
+use App\Models\CommitteePosition;
+
+class CommitteePositionSeeder extends Seeder
+{
+    public function run(): void
+    {
+        $positions = [
+            ['name' => 'Ketua Pelaksana', 'is_bph' => true],
+            ['name' => 'Wakil Ketua', 'is_bph' => true],
+            ['name' => 'Sekretaris', 'is_bph' => true],
+            ['name' => 'Bendahara', 'is_bph' => true],
+            ['name' => 'Koordinator Acara', 'is_bph' => false],
+            ['name' => 'Anggota Acara', 'is_bph' => false],
+            ['name' => 'Koordinator Humas', 'is_bph' => false],
+            ['name' => 'Anggota Humas', 'is_bph' => false],
+            ['name' => 'Koordinator Pubdekdok', 'is_bph' => false],
+            ['name' => 'Anggota Pubdekdok', 'is_bph' => false],
+        ];
+
+        foreach ($positions as $pos) {
+            CommitteePosition::updateOrCreate(['name' => $pos['name']], $pos);
+        }
+    }
+}
+````
+
+## File: database/seeders/SettingSeeder.php
+````php
+<?php
+
+namespace Database\Seeders;
+
+use Illuminate\Database\Seeder;
+use App\Models\Setting;
+
+class SettingSeeder extends Seeder
+{
+    public function run(): void
+    {
+        Setting::insert([
+            ['key' => 'org_name', 'value' => 'Protik', 'type' => 'string', 'description' => 'Nama Organisasi', 'created_at' => now(), 'updated_at' => now()],
+            ['key' => 'org_logo', 'value' => '', 'type' => 'file', 'description' => 'URL Logo Organisasi', 'created_at' => now(), 'updated_at' => now()],
+        ]);
+    }
+}
+````
+
+## File: tests/Feature/ArchiveFeatureTest.php
+````php
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\Archive;
+use App\Models\Setting;
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Spatie\Permission\Models\Role;
+use Tests\TestCase;
+
+class ArchiveFeatureTest extends TestCase
+{
+    use RefreshDatabase;
+
+    protected User $admin;
+    protected User $member;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        Role::firstOrCreate(['name' => 'admin', 'guard_name' => 'web']);
+        Role::firstOrCreate(['name' => 'member', 'guard_name' => 'web']);
+
+        $this->admin = User::factory()->create();
+        $this->admin->assignRole('admin');
+
+        $this->member = User::factory()->create();
+        $this->member->assignRole('member');
+    }
+
+    public function test_can_list_archives(): void
+    {
+        Archive::create([
+            'period_year' => '2025/2026',
+            'name'        => 'Dokumentasi LPJ 2025',
+            'drive_url'   => 'https://drive.google.com/drive/folders/test1',
+        ]);
+
+        $response = $this->actingAs($this->member, 'sanctum')
+            ->getJson('/api/archives');
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'success' => true,
+            ])
+            ->assertJsonCount(1, 'data');
+    }
+
+    public function test_can_create_archive(): void
+    {
+        $payload = [
+            'period_year' => '2025/2026',
+            'name'        => 'Arsip Baru',
+            'drive_url'   => 'https://drive.google.com/drive/folders/test2',
+        ];
+
+        $response = $this->actingAs($this->admin, 'sanctum')
+            ->postJson('/api/archives', $payload);
+
+        $response->assertStatus(201)
+            ->assertJson([
+                'success' => true,
+                'message' => 'Arsip dibuat.',
+            ]);
+
+        $this->assertDatabaseHas('archives', [
+            'name' => 'Arsip Baru',
+        ]);
+    }
+
+    public function test_can_update_archive(): void
+    {
+        $archive = Archive::create([
+            'period_year' => '2025/2026',
+            'name'        => 'Arsip Lama',
+            'drive_url'   => 'https://drive.google.com/drive/folders/test3',
+        ]);
+
+        $response = $this->actingAs($this->admin, 'sanctum')
+            ->putJson("/api/archives/{$archive->id}", [
+                'name' => 'Arsip Terupdate',
+            ]);
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'success' => true,
+                'message' => 'Arsip diperbarui.',
+            ]);
+
+        $this->assertDatabaseHas('archives', [
+            'id'   => $archive->id,
+            'name' => 'Arsip Terupdate',
+        ]);
+    }
+
+    public function test_can_delete_archive(): void
+    {
+        $archive = Archive::create([
+            'period_year' => '2025/2026',
+            'name'        => 'Arsip Hapus',
+            'drive_url'   => 'https://drive.google.com/drive/folders/test4',
+        ]);
+
+        $response = $this->actingAs($this->admin, 'sanctum')
+            ->deleteJson("/api/archives/{$archive->id}");
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'success' => true,
+                'message' => 'Arsip dihapus.',
+            ]);
+
+        $this->assertDatabaseMissing('archives', [
+            'id' => $archive->id,
+        ]);
+    }
+
+    public function test_can_get_and_batch_update_settings(): void
+    {
+        Setting::create([
+            'key'         => 'org_name',
+            'value'       => 'Protik',
+            'type'        => 'string',
+            'description' => 'Nama Organisasi',
+        ]);
+
+        // Get settings
+        $response = $this->actingAs($this->member, 'sanctum')
+            ->getJson('/api/settings');
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'success' => true,
+                'data'    => [
+                    'org_name' => 'Protik',
+                ],
+            ]);
+
+        // Update batch settings by admin
+        $updateResponse = $this->actingAs($this->admin, 'sanctum')
+            ->postJson('/api/settings/batch', [
+                'settings' => [
+                    ['key' => 'org_name', 'value' => 'Protik Indonesia'],
+                ],
+            ]);
+
+        $updateResponse->assertStatus(200)
+            ->assertJson([
+                'success' => true,
+                'message' => 'Pengaturan berhasil diperbarui.',
+            ]);
+
+        $this->assertDatabaseHas('settings', [
+            'key'   => 'org_name',
+            'value' => 'Protik Indonesia',
+        ]);
+    }
+}
+````
+
+## File: tests/Feature/CheckEventBPHTest.php
+````php
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\CommitteePosition;
+use App\Models\Event;
+use App\Models\EventCommittee;
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Route;
+use Spatie\Permission\Models\Role;
+use Tests\TestCase;
+
+class CheckEventBPHTest extends TestCase
+{
+    use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        Role::firstOrCreate(['name' => 'admin', 'guard_name' => 'web']);
+        Role::firstOrCreate(['name' => 'member', 'guard_name' => 'web']);
+
+        Route::middleware(['auth:sanctum', \App\Http\Middleware\CheckEventBPH::class])
+            ->get('/api/test-event-bph', fn() => response()->json(['success' => true]));
+    }
+
+    public function test_admin_can_bypass_check_event_bph(): void
+    {
+        $admin = User::factory()->create();
+        $admin->assignRole('admin');
+
+        $response = $this->actingAs($admin, 'sanctum')
+            ->getJson('/api/test-event-bph?event_id=1');
+
+        $response->assertStatus(200)
+            ->assertJson(['success' => true]);
+    }
+
+    public function test_member_with_bph_position_is_allowed(): void
+    {
+        $member = User::factory()->create();
+        $member->assignRole('member');
+
+        $event = Event::factory()->create();
+        $bphPos = CommitteePosition::create([
+            'name'   => 'Ketua Pelaksana',
+            'is_bph' => true,
+        ]);
+
+        EventCommittee::create([
+            'event_id'    => $event->id,
+            'user_id'     => $member->id,
+            'position_id' => $bphPos->id,
+        ]);
+
+        $response = $this->actingAs($member, 'sanctum')
+            ->getJson("/api/test-event-bph?event_id={$event->id}");
+
+        $response->assertStatus(200)
+            ->assertJson(['success' => true]);
+    }
+
+    public function test_member_with_non_bph_position_is_rejected(): void
+    {
+        $member = User::factory()->create();
+        $member->assignRole('member');
+
+        $event = Event::factory()->create();
+        $nonBphPos = CommitteePosition::create([
+            'name'   => 'Anggota Acara',
+            'is_bph' => false,
+        ]);
+
+        EventCommittee::create([
+            'event_id'    => $event->id,
+            'user_id'     => $member->id,
+            'position_id' => $nonBphPos->id,
+        ]);
+
+        $response = $this->actingAs($member, 'sanctum')
+            ->getJson("/api/test-event-bph?event_id={$event->id}");
+
+        $response->assertStatus(403)
+            ->assertJson([
+                'success' => false,
+                'message' => 'Akses ditolak. Anda tidak memiliki wewenang BPH pada Event ini.',
+            ]);
+    }
+}
+````
+
+## File: tests/Feature/CommitteePositionFeatureTest.php
+````php
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\CommitteePosition;
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Spatie\Permission\Models\Role;
+use Tests\TestCase;
+
+class CommitteePositionFeatureTest extends TestCase
+{
+    use RefreshDatabase;
+
+    protected User $admin;
+    protected User $member;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        Role::firstOrCreate(['name' => 'admin', 'guard_name' => 'web']);
+        Role::firstOrCreate(['name' => 'member', 'guard_name' => 'web']);
+
+        $this->admin = User::factory()->create();
+        $this->admin->assignRole('admin');
+
+        $this->member = User::factory()->create();
+        $this->member->assignRole('member');
+    }
+
+    public function test_admin_can_list_committee_positions(): void
+    {
+        CommitteePosition::create([
+            'name'   => 'Ketua Pelaksana',
+            'is_bph' => true,
+        ]);
+
+        $response = $this->actingAs($this->admin, 'sanctum')
+            ->getJson('/api/committee-positions');
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'success' => true,
+            ])
+            ->assertJsonCount(1, 'data');
+    }
+
+    public function test_admin_can_create_committee_position(): void
+    {
+        $payload = [
+            'name'   => 'Koordinator Acara',
+            'is_bph' => false,
+        ];
+
+        $response = $this->actingAs($this->admin, 'sanctum')
+            ->postJson('/api/committee-positions', $payload);
+
+        $response->assertStatus(201)
+            ->assertJson([
+                'success' => true,
+                'message' => 'Jabatan kepanitiaan berhasil ditambahkan.',
+            ]);
+
+        $this->assertDatabaseHas('committee_positions', [
+            'name'   => 'Koordinator Acara',
+            'is_bph' => false,
+        ]);
+    }
+
+    public function test_admin_can_update_committee_position(): void
+    {
+        $position = CommitteePosition::create([
+            'name'   => 'Koordinator Humas Lama',
+            'is_bph' => false,
+        ]);
+
+        $response = $this->actingAs($this->admin, 'sanctum')
+            ->putJson("/api/committee-positions/{$position->id}", [
+                'name'   => 'Koordinator Humas Baru',
+                'is_bph' => true,
+            ]);
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'success' => true,
+                'message' => 'Data jabatan berhasil diperbarui.',
+            ]);
+
+        $this->assertDatabaseHas('committee_positions', [
+            'id'     => $position->id,
+            'name'   => 'Koordinator Humas Baru',
+            'is_bph' => true,
+        ]);
+    }
+
+    public function test_admin_can_delete_committee_position(): void
+    {
+        $position = CommitteePosition::create([
+            'name'   => 'Jabatan Hapus',
+            'is_bph' => false,
+        ]);
+
+        $response = $this->actingAs($this->admin, 'sanctum')
+            ->deleteJson("/api/committee-positions/{$position->id}");
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'success' => true,
+                'message' => 'Data jabatan berhasil dihapus.',
+            ]);
+
+        $this->assertDatabaseMissing('committee_positions', [
+            'id' => $position->id,
+        ]);
+    }
+
+    public function test_member_cannot_access_committee_positions(): void
+    {
+        $response = $this->actingAs($this->member, 'sanctum')
+            ->getJson('/api/committee-positions');
+
+        $response->assertStatus(403);
+    }
+}
+````
 
 ## File: .docs/prd.md
 ````markdown
@@ -396,6 +1329,7 @@ class AuthController extends Controller
 
 namespace App\Http\Controllers;
 
+use App\Models\CommitteePosition;
 use App\Models\EventCommittee;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -408,29 +1342,40 @@ class EventCommitteeController extends Controller
             'event_id' => ['required', 'exists:events,id'],
         ]);
 
-        $committees = EventCommittee::with('user')
+        $committees = EventCommittee::with(['user', 'position'])
             ->where('event_id', $request->event_id)
             ->get();
 
         return response()->json([
             'message' => 'Success',
-            'data' => $committees,
+            'data'    => $committees,
         ]);
     }
 
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'event_id' => ['required', 'exists:events,id'],
-            'user_id' => ['required', 'exists:users,id'],
-            'position' => ['required', 'string'],
+            'event_id'    => ['required', 'exists:events,id'],
+            'user_id'     => ['required', 'exists:users,id'],
+            'position_id' => ['nullable', 'exists:committee_positions,id'],
+            'position'    => ['nullable', 'string'],
         ]);
+
+        if (empty($validated['position_id']) && !empty($validated['position'])) {
+            $pos = CommitteePosition::firstOrCreate(
+                ['name' => $validated['position']],
+                ['is_bph' => false]
+            );
+            $validated['position_id'] = $pos->id;
+        }
+
+        unset($validated['position']);
 
         $committee = EventCommittee::create($validated);
 
         return response()->json([
             'message' => 'Success',
-            'data' => $committee->load('user'),
+            'data'    => $committee->load(['user', 'position']),
         ], 201);
     }
 
@@ -482,38 +1427,6 @@ class RoleController extends Controller
             'message' => 'Success',
             'data' => $role,
         ], 201);
-    }
-}
-````
-
-## File: app/Http/Resources/EventResource.php
-````php
-<?php
-
-namespace App\Http\Resources;
-
-use Illuminate\Http\Request;
-use Illuminate\Http\Resources\Json\JsonResource;
-
-class EventResource extends JsonResource
-{
-    public function toArray(Request $request): array
-    {
-        return [
-            'id'                => $this->id,
-            'name'              => $this->name,
-            'description'       => $this->description,
-            'budget_approved'   => (float) $this->budget_approved,
-            'drive_folder_url'  => $this->drive_folder_url,
-            'document_sync_url' => $this->document_sync_url,
-            'finance_sync_url'  => $this->finance_sync_url,
-            'start_date'        => $this->start_date?->format('Y-m-d'),
-            'end_date'          => $this->end_date?->format('Y-m-d'),
-            'created_at'        => $this->created_at?->toISOString(),
-            'updated_at'        => $this->updated_at?->toISOString(),
-            'committees'        => $this->whenLoaded('committees'),
-            'finances'          => $this->whenLoaded('finances'),
-        ];
     }
 }
 ````
@@ -657,12 +1570,20 @@ class AuditTrail extends Model
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class EventCommittee extends Model
 {
-    protected $fillable = ['event_id', 'user_id', 'position'];
+    use HasFactory;
+
+    protected $fillable = ['event_id', 'user_id', 'position_id'];
+
+    public function position(): BelongsTo
+    {
+        return $this->belongsTo(CommitteePosition::class, 'position_id');
+    }
 
     public function event(): BelongsTo
     {
@@ -788,136 +1709,6 @@ use App\Providers\AppServiceProvider;
 
 return [
     AppServiceProvider::class,
-];
-````
-
-## File: config/app.php
-````php
-<?php
-
-return [
-
-    /*
-    |--------------------------------------------------------------------------
-    | Application Name
-    |--------------------------------------------------------------------------
-    |
-    | This value is the name of your application, which will be used when the
-    | framework needs to place the application's name in a notification or
-    | other UI elements where an application name needs to be displayed.
-    |
-    */
-
-    'name' => env('APP_NAME', 'Laravel'),
-
-    /*
-    |--------------------------------------------------------------------------
-    | Application Environment
-    |--------------------------------------------------------------------------
-    |
-    | This value determines the "environment" your application is currently
-    | running in. This may determine how you prefer to configure various
-    | services the application utilizes. Set this in your ".env" file.
-    |
-    */
-
-    'env' => env('APP_ENV', 'production'),
-
-    /*
-    |--------------------------------------------------------------------------
-    | Application Debug Mode
-    |--------------------------------------------------------------------------
-    |
-    | When your application is in debug mode, detailed error messages with
-    | stack traces will be shown on every error that occurs within your
-    | application. If disabled, a simple generic error page is shown.
-    |
-    */
-
-    'debug' => (bool) env('APP_DEBUG', false),
-
-    /*
-    |--------------------------------------------------------------------------
-    | Application URL
-    |--------------------------------------------------------------------------
-    |
-    | This URL is used by the console to properly generate URLs when using
-    | the Artisan command line tool. You should set this to the root of
-    | the application so that it's available within Artisan commands.
-    |
-    */
-
-    'url' => env('APP_URL', 'http://localhost'),
-
-    /*
-    |--------------------------------------------------------------------------
-    | Application Timezone
-    |--------------------------------------------------------------------------
-    |
-    | Here you may specify the default timezone for your application, which
-    | will be used by the PHP date and date-time functions. The timezone
-    | is set to "UTC" by default as it is suitable for most use cases.
-    |
-    */
-
-    'timezone' => 'UTC',
-
-    /*
-    |--------------------------------------------------------------------------
-    | Application Locale Configuration
-    |--------------------------------------------------------------------------
-    |
-    | The application locale determines the default locale that will be used
-    | by Laravel's translation / localization methods. This option can be
-    | set to any locale for which you plan to have translation strings.
-    |
-    */
-
-    'locale' => env('APP_LOCALE', 'en'),
-
-    'fallback_locale' => env('APP_FALLBACK_LOCALE', 'en'),
-
-    'faker_locale' => env('APP_FAKER_LOCALE', 'en_US'),
-
-    /*
-    |--------------------------------------------------------------------------
-    | Encryption Key
-    |--------------------------------------------------------------------------
-    |
-    | This key is utilized by Laravel's encryption services and should be set
-    | to a random, 32 character string to ensure that all encrypted values
-    | are secure. You should do this prior to deploying the application.
-    |
-    */
-
-    'cipher' => 'AES-256-CBC',
-
-    'key' => env('APP_KEY'),
-
-    'previous_keys' => [
-        ...array_filter(
-            explode(',', (string) env('APP_PREVIOUS_KEYS', ''))
-        ),
-    ],
-
-    /*
-    |--------------------------------------------------------------------------
-    | Maintenance Mode Driver
-    |--------------------------------------------------------------------------
-    |
-    | These configuration options determine the driver used to determine and
-    | manage Laravel's "maintenance mode" status. The "cache" driver will
-    | allow maintenance mode to be controlled across multiple machines.
-    |
-    | Supported drivers: "file", "cache", "array"
-    |
-    */
-
-    'maintenance' => [
-        'driver' => env('APP_MAINTENANCE_DRIVER', 'file'),
-        'store' => env('APP_MAINTENANCE_STORE', 'database'),
-    ],
-
 ];
 ````
 
@@ -3514,6 +4305,29 @@ return new class extends Migration
 };
 ````
 
+## File: database/migrations/2026_08_26_071900_add_agenda_sync_url_to_events_table.php
+````php
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration {
+    public function up(): void {
+        Schema::table('events', function (Blueprint $table) {
+            $table->string('agenda_sync_url')->nullable()->after('finance_sync_url');
+        });
+    }
+
+    public function down(): void {
+        Schema::table('events', function (Blueprint $table) {
+            $table->dropColumn('agenda_sync_url');
+        });
+    }
+};
+````
+
 ## File: database/seeders/RolePermissionSeeder.php
 ````php
 <?php
@@ -4412,16 +5226,6 @@ If you discover a security vulnerability within Laravel, please send an e-mail t
 The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
 ````
 
-## File: setActiveChartTab(key)}
-````
-
-````
-
-## File: setTimeRange(e.target.value)}
-````
-
-````
-
 ## File: vite.config.js
 ````javascript
 import { defineConfig } from 'vite';
@@ -4520,7 +5324,10 @@ abstract class Controller
         
         $isCommittee = EventCommittee::where('event_id', $eventId)
             ->where('user_id', $user->id)
-            ->whereIn('position', $allowedPositions)
+            ->whereHas('position', function ($query) use ($allowedPositions) {
+                $query->whereIn('name', $allowedPositions)
+                      ->orWhere('is_bph', true);
+            })
             ->exists();
             
         if (!$isCommittee) abort(403, 'Anda tidak memiliki hak akses untuk Event ini.');
@@ -4597,152 +5404,6 @@ class DivisionController extends Controller
     {
         $division->delete();
         return response()->json(['message' => 'Divisi berhasil dihapus']);
-    }
-}
-````
-
-## File: app/Http/Controllers/MonthlyDueController.php
-````php
-<?php
-
-namespace App\Http\Controllers;
-
-use App\Models\MonthlyDue;
-use App\Models\User;
-use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-
-class MonthlyDueController extends Controller
-{
-    public function index(): JsonResponse
-    {
-        // Mengembalikan struktur untuk Heatmap Frontend
-        // PENGECUALIAN: Sembunyikan role 'advisor' dari tabel tagihan kas
-        $users = User::with('roles')
-            ->whereDoesntHave('roles', fn($q) => $q->where('name', 'advisor'))
-            ->get();
-            
-        $dues = MonthlyDue::all();
-        
-        return response()->json([
-            'users' => $users,
-            'dues'  => $dues,
-        ]);
-    }
-
-    public function sync(Request $request): JsonResponse
-    {
-        $url = env('TRACKING_KAS_URL');
-        if (!$url) return response()->json(['message' => 'URL Sinkronisasi belum dikonfigurasi.'], 500);
-
-        $separator = str_contains($url, '?') ? '&' : '?';
-        $freshUrl = $url . $separator . 'cb=' . time();
-
-        try {
-            $context = stream_context_create(['http' => ['header' => "Cache-Control: no-cache\r\n"]]);
-            $csvData = file_get_contents($freshUrl, false, $context);
-            $rows = array_map('str_getcsv', explode("\n", $csvData));
-            
-            $idIdx = false;
-            $dataStartIndex = 0;
-            $bulanMap = [
-                'JANUARI' => 1, 'FEBRUARI' => 2, 'MARET' => 3, 'APRIL' => 4,
-                'MEI' => 5, 'JUNI' => 6, 'JULI' => 7, 'AGUSTUS' => 8,
-                'SEPTEMBER' => 9, 'OKTOBER' => 10, 'NOVEMBER' => 11, 'DESEMBER' => 12
-            ];
-            $bulanIndexes = [];
-
-            // Memindai baris per baris untuk mengakomodasi Multi-Row Headers (Merged Cells)
-            foreach ($rows as $index => $row) {
-                $cleanRow = array_map(fn($v) => strtoupper(trim($v)), $row);
-                
-                // Cari Index ID User (Biasanya ada di baris pertama Header)
-                if (in_array('ID USER', $cleanRow)) {
-                    $idIdx = array_search('ID USER', $cleanRow);
-                }
-
-                // Cari Index Bulan (Biasanya ada di baris kedua Header)
-                if (in_array('OKTOBER', $cleanRow)) {
-                    $dataStartIndex = $index + 1;
-                    foreach ($bulanMap as $namaBulan => $angkaBulan) {
-                        $idx = array_search($namaBulan, $cleanRow);
-                        if ($idx !== false) {
-                            $bulanIndexes[$namaBulan] = ['index' => $idx, 'month_num' => $angkaBulan];
-                        }
-                    }
-                    break; // Selesai memindai header
-                }
-            }
-
-            if (empty($bulanIndexes) || $idIdx === false) {
-                return response()->json(['message' => 'Format Header (ID USER pada baris atas, dan OKTOBER pada baris bawah) tidak ditemukan.'], 400);
-            }
-
-            $successCount = 0;
-            $unmatchedIds = [];
-
-            DB::transaction(function () use ($rows, $dataStartIndex, $idIdx, $bulanIndexes, &$successCount, &$unmatchedIds) {
-                for ($i = $dataStartIndex; $i < count($rows); $i++) {
-                    $row = $rows[$i];
-                    if (empty($row) || count($row) < 3) continue;
-
-                    $userId = trim($row[$idIdx] ?? '');
-                    
-                    // FIX: Abaikan jika kosong, NaN, atau BUKAN ANGKA (seperti baris "Total Keseluruhan")
-                    if (empty($userId) || strtolower($userId) === 'nan' || !is_numeric($userId)) {
-                        continue;
-                    }
-
-                    $user = User::find($userId);
-                    if (!$user) {
-                        $unmatchedIds[] = "Baris " . ($i + 1) . " (ID: $userId)";
-                        continue; 
-                    }
-
-                    $successCount++;
-
-                    foreach ($bulanIndexes as $bData) {
-                        $idx = $bData['index'];
-                        $monthNum = $bData['month_num'];
-                        $valRaw = trim($row[$idx] ?? ''); 
-                        
-                        if (strtolower($valRaw) === 'nan' || $valRaw === '') {
-                            $amount = 0;
-                        } else {
-                            // Filter format Rupiah: Pisahkan koma desimal, lalu ambil angkanya
-                            $valNoDec = explode(',', $valRaw)[0];
-                            $amount = (float) preg_replace('/[^0-9]/', '', $valNoDec);
-                        }
-
-                        $year = (int) date('Y');
-                        if ($monthNum >= 7 && $monthNum <= 12) {
-                            // Penyesuaian tahun kepengurusan
-                        }
-
-                        if ($amount > 0) {
-                            MonthlyDue::updateOrCreate(
-                                ['user_id' => $user->id, 'month' => $monthNum, 'year' => $year],
-                                ['amount' => $amount]
-                            );
-                        } else {
-                            MonthlyDue::where('user_id', $user->id)
-                                ->where('month', $monthNum)
-                                ->where('year', $year)
-                                ->delete();
-                        }
-                    }
-                }
-            });
-
-            $msg = "Berhasil: $successCount pengurus disinkronkan.";
-            if (count($unmatchedIds) > 0) $msg .= " Peringatan: ID tidak valid pada " . count($unmatchedIds) . " baris (" . implode(', ', array_slice($unmatchedIds, 0, 3)) . "...).";
-
-            return response()->json(['message' => $msg]);
-
-        } catch (\Exception $e) {
-            return response()->json(['message' => 'Gagal menyinkronisasi data kas.', 'error' => $e->getMessage()], 500);
-        }
     }
 }
 ````
@@ -4849,6 +5510,39 @@ class DocumentResource extends JsonResource
             'updated_at'    => $this->updated_at?->toISOString(),
             'creator'       => $this->whenLoaded('creator'),
             'event'         => $this->whenLoaded('event'),
+        ];
+    }
+}
+````
+
+## File: app/Http/Resources/EventResource.php
+````php
+<?php
+
+namespace App\Http\Resources;
+
+use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\JsonResource;
+
+class EventResource extends JsonResource
+{
+    public function toArray(Request $request): array
+    {
+        return [
+            'id'                => $this->id,
+            'name'              => $this->name,
+            'description'       => $this->description,
+            'budget_approved'   => (float) $this->budget_approved,
+            'drive_folder_url'  => $this->drive_folder_url,
+            'document_sync_url' => $this->document_sync_url,
+            'finance_sync_url'  => $this->finance_sync_url,
+            'agenda_sync_url'   => $this->agenda_sync_url,
+            'start_date'        => $this->start_date?->format('Y-m-d'),
+            'end_date'          => $this->end_date?->format('Y-m-d'),
+            'created_at'        => $this->created_at?->toISOString(),
+            'updated_at'        => $this->updated_at?->toISOString(),
+            'committees'        => $this->whenLoaded('committees'),
+            'finances'          => $this->whenLoaded('finances'),
         ];
     }
 }
@@ -4994,6 +5688,136 @@ class FinanceService
         return Finance::create($data);
     }
 }
+````
+
+## File: config/app.php
+````php
+<?php
+
+return [
+
+    /*
+    |--------------------------------------------------------------------------
+    | Application Name
+    |--------------------------------------------------------------------------
+    |
+    | This value is the name of your application, which will be used when the
+    | framework needs to place the application's name in a notification or
+    | other UI elements where an application name needs to be displayed.
+    |
+    */
+
+    'name' => env('APP_NAME', 'Laravel'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Application Environment
+    |--------------------------------------------------------------------------
+    |
+    | This value determines the "environment" your application is currently
+    | running in. This may determine how you prefer to configure various
+    | services the application utilizes. Set this in your ".env" file.
+    |
+    */
+
+    'env' => env('APP_ENV', 'production'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Application Debug Mode
+    |--------------------------------------------------------------------------
+    |
+    | When your application is in debug mode, detailed error messages with
+    | stack traces will be shown on every error that occurs within your
+    | application. If disabled, a simple generic error page is shown.
+    |
+    */
+
+    'debug' => (bool) env('APP_DEBUG', false),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Application URL
+    |--------------------------------------------------------------------------
+    |
+    | This URL is used by the console to properly generate URLs when using
+    | the Artisan command line tool. You should set this to the root of
+    | the application so that it's available within Artisan commands.
+    |
+    */
+
+    'url' => env('APP_URL', 'http://localhost'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Application Timezone
+    |--------------------------------------------------------------------------
+    |
+    | Here you may specify the default timezone for your application, which
+    | will be used by the PHP date and date-time functions. The timezone
+    | is set to "UTC" by default as it is suitable for most use cases.
+    |
+    */
+
+    'timezone' => 'Asia/Jakarta',
+
+    /*
+    |--------------------------------------------------------------------------
+    | Application Locale Configuration
+    |--------------------------------------------------------------------------
+    |
+    | The application locale determines the default locale that will be used
+    | by Laravel's translation / localization methods. This option can be
+    | set to any locale for which you plan to have translation strings.
+    |
+    */
+
+    'locale' => env('APP_LOCALE', 'en'),
+
+    'fallback_locale' => env('APP_FALLBACK_LOCALE', 'en'),
+
+    'faker_locale' => env('APP_FAKER_LOCALE', 'en_US'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Encryption Key
+    |--------------------------------------------------------------------------
+    |
+    | This key is utilized by Laravel's encryption services and should be set
+    | to a random, 32 character string to ensure that all encrypted values
+    | are secure. You should do this prior to deploying the application.
+    |
+    */
+
+    'cipher' => 'AES-256-CBC',
+
+    'key' => env('APP_KEY'),
+
+    'previous_keys' => [
+        ...array_filter(
+            explode(',', (string) env('APP_PREVIOUS_KEYS', ''))
+        ),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Maintenance Mode Driver
+    |--------------------------------------------------------------------------
+    |
+    | These configuration options determine the driver used to determine and
+    | manage Laravel's "maintenance mode" status. The "cache" driver will
+    | allow maintenance mode to be controlled across multiple machines.
+    |
+    | Supported drivers: "file", "cache", "array"
+    |
+    */
+
+    'maintenance' => [
+        'driver' => env('APP_MAINTENANCE_DRIVER', 'file'),
+        'store' => env('APP_MAINTENANCE_STORE', 'database'),
+    ],
+
+];
 ````
 
 ## File: config/cors.php
@@ -5158,95 +5982,6 @@ Route::get('/', function () {
 
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth:sanctum');
-````
-
-## File: tests/Feature/AgendaTest.php
-````php
-<?php
-
-namespace Tests\Feature;
-
-use App\Models\Agenda;
-use App\Models\Event;
-use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-use Spatie\Permission\Models\Role;
-use Tests\TestCase;
-
-class AgendaTest extends TestCase
-{
-    use RefreshDatabase;
-
-    protected User $user;
-
-    protected function setUp(): void
-    {
-        parent::setUp();
-        Role::firstOrCreate(['name' => 'member', 'guard_name' => 'web']);
-        $this->user = User::factory()->create();
-        $this->user->assignRole('member');
-    }
-
-    public function test_can_list_agendas_with_strict_event_filtering(): void
-    {
-        $event = Event::factory()->create();
-
-        Agenda::create([
-            'title'      => 'BPH Pusat Agenda',
-            'start_date' => now(),
-            'event_id'   => null,
-        ]);
-
-        Agenda::create([
-            'title'      => 'Event Agenda',
-            'start_date' => now(),
-            'event_id'   => $event->id,
-        ]);
-
-        // Query without event_id -> should return BPH Pusat agenda only
-        $response = $this->actingAs($this->user, 'sanctum')
-            ->getJson('/api/agendas');
-
-        $response->assertStatus(200);
-        $response->assertJsonCount(1, 'data');
-        $response->assertJsonFragment(['title' => 'BPH Pusat Agenda']);
-
-        // Query with event_id -> should return event agenda only
-        $responseEvent = $this->actingAs($this->user, 'sanctum')
-            ->getJson('/api/agendas?event_id=' . $event->id);
-
-        $responseEvent->assertStatus(200);
-        $responseEvent->assertJsonCount(1, 'data');
-        $responseEvent->assertJsonFragment(['title' => 'Event Agenda']);
-    }
-
-    public function test_can_set_agenda_targets(): void
-    {
-        $agenda = Agenda::create([
-            'title'      => 'Rapat Pleno',
-            'start_date' => now(),
-        ]);
-
-        $payload = [
-            'targets' => [
-                ['type' => 'all', 'value' => null],
-                ['type' => 'division', 'value' => '1'],
-                ['type' => 'coordinator', 'value' => null],
-            ],
-        ];
-
-        $response = $this->actingAs($this->user, 'sanctum')
-            ->postJson("/api/agendas/{$agenda->id}/targets", $payload);
-
-        $response->assertStatus(200);
-        $this->assertDatabaseCount('agenda_targets', 3);
-        $this->assertDatabaseHas('agenda_targets', [
-            'agenda_id'   => $agenda->id,
-            'target_type' => 'division',
-            'target_value' => '1',
-        ]);
-    }
-}
 ````
 
 ## File: tests/Feature/ProfileTest.php
@@ -5509,246 +6244,6 @@ SANCTUM_STATEFUL_DOMAINS=localhost:5173,127.0.0.1:5173,localhost:3000,127.0.0.1:
 FRONTEND_URL=http://localhost:5173
 ````
 
-## File: app/Http/Controllers/AgendaController.php
-````php
-<?php
-
-namespace App\Http\Controllers;
-
-use App\Http\Resources\AgendaResource;
-use App\Models\Agenda;
-use App\Models\AgendaTarget;
-use App\Models\Event;
-use Carbon\Carbon;
-use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
-use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
-use Illuminate\Support\Facades\DB;
-
-class AgendaController extends Controller
-{
-    public function index(Request $request): AnonymousResourceCollection
-    {
-        $eventId = $request->input('event_id');
-        $search  = $request->input('search');
-
-        $agendas = Agenda::with(['attendances', 'targets'])
-            ->when($eventId, fn($q) => $q->where('event_id', $eventId), fn($q) => $q->whereNull('event_id'))
-            ->when($search, fn($q) => $q->where('title', 'like', "%{$search}%"))
-            ->orderBy('start_date', 'asc')
-            ->paginate(15);
-
-        return AgendaResource::collection($agendas);
-    }
-
-    public function sync(Request $request): JsonResponse
-    {
-        $eventId = $request->input('event_id');
-
-        // Untuk Agenda, asumsikan URL berada di .env (BPH) atau event_sync_url (opsional ke depan). 
-        // Sementara kita pakai TRACKING_AGENDA_URL dari env
-        $url = env('TRACKING_AGENDA_URL');
-        if (!$url) return response()->json(['message' => 'URL Sinkronisasi Agenda belum dikonfigurasi di .env'], 500);
-
-        $separator = str_contains($url, '?') ? '&' : '?';
-        $freshUrl = $url . $separator . 'cb=' . time();
-
-        try {
-            $context = stream_context_create(['http' => ['header' => "Cache-Control: no-cache\r\n"]]);
-            $csvData = file_get_contents($freshUrl, false, $context);
-            $rows = array_map('str_getcsv', explode("\n", $csvData));
-            
-            $header = [];
-            $dataStartIndex = 0;
-            
-            // Pencarian Header Agnostik
-            foreach ($rows as $index => $row) {
-                $cleanRow = array_map('trim', $row);
-                $rowString = strtolower(implode(' | ', $cleanRow));
-                
-                if (str_contains($rowString, 'nama agenda') && str_contains($rowString, 'tanggal mulai')) {
-                    $header = $cleanRow;
-                    $dataStartIndex = $index + 1;
-                    break;
-                }
-            }
-
-            if (empty($header)) return response()->json(['message' => 'Format Header (Nama Agenda, Tanggal Mulai, dll) tidak ditemukan.'], 400);
-
-            $idx = [
-                'nama'      => array_search('Nama Agenda', $header),
-                'start'     => array_search('Tanggal Mulai', $header),
-                'end'       => array_search('Tanggal Selesai', $header),
-                'tempat'    => array_search('Tempat', $header),
-                'pj'        => array_search('PJ/Divisi', $header),
-                'status'    => array_search('Status', $header),
-                'notulensi' => array_search('Link Notulensi', $header),
-            ];
-
-            $parseDate = function ($dateStr) {
-                if (empty($dateStr) || strtolower(trim($dateStr)) === 'nat' || strtolower(trim($dateStr)) === 'nan') return null;
-                try { 
-                    // FIX UTAMA: Ubah garis miring (/) menjadi strip (-) agar dikenali sebagai format DD-MM-YYYY oleh PHP/Carbon
-                    $cleanDate = str_replace('/', '-', trim($dateStr));
-                    return Carbon::parse($cleanDate)->format('Y-m-d H:i:s'); 
-                } catch (\Exception $e) { 
-                    return null; 
-                }
-            };
-            
-            $parseUrl = function ($urlStr) { return filter_var(trim($urlStr), FILTER_VALIDATE_URL) ? trim($urlStr) : null; };
-            $val = function($row, $index) { if ($index === false || !isset($row[$index])) return null; $v = trim($row[$index]); return (strtolower($v) === 'nan' || $v === '') ? null : $v; };
-
-            $successCount = 0;
-
-            DB::transaction(function () use ($rows, $dataStartIndex, $idx, $parseDate, $parseUrl, $val, $eventId, &$successCount) {
-                // Wipe Data (Scope Event/Global)
-                if ($eventId) {
-                    Agenda::where('event_id', $eventId)->delete();
-                } else {
-                    Agenda::whereNull('event_id')->delete();
-                }
-
-                for ($i = $dataStartIndex; $i < count($rows); $i++) {
-                    $row = array_map('trim', $rows[$i]);
-                    if (empty($row) || count($row) < 3) continue;
-
-                    $nama  = $val($row, $idx['nama']);
-                    $start = $parseDate($val($row, $idx['start']));
-                    
-                    if (empty($nama) || !$start) continue;
-
-                    Agenda::create([
-                        'event_id'    => $eventId ? (int)$eventId : null,
-                        'title'       => $nama,
-                        'start_date'  => $start,
-                        'end_date'    => $parseDate($val($row, $idx['end'])),
-                        'location'    => $val($row, $idx['tempat']),
-                        'pic'         => $val($row, $idx['pj']),
-                        'status'      => $val($row, $idx['status']),
-                        'minutes_url' => $parseUrl($val($row, $idx['notulensi'])),
-                    ]);
-
-                    $successCount++;
-                }
-            });
-
-            $target = $eventId ? "Kepanitiaan" : "BPH Pusat";
-            return response()->json(['message' => "Sinkronisasi selesai. Berhasil menyinkronkan $successCount agenda $target."]);
-
-        } catch (\Exception $e) { return response()->json(['message' => 'Gagal menyinkronisasi data agenda.', 'error' => $e->getMessage()], 500); }
-    }
-
-    public function setTargets(Request $request, $id): JsonResponse
-    {
-        $agenda = Agenda::findOrFail($id);
-        
-        $validated = $request->validate([
-            'targets'          => 'required|array',
-            'targets.*.type'   => 'required|in:all,bph,coordinator,division,position,user',
-            'targets.*.value'  => 'nullable|string',
-        ]);
-
-        DB::transaction(function () use ($agenda, $validated) {
-            // Hapus target lama
-            $agenda->targets()->delete();
-            
-            // Masukkan target baru
-            foreach ($validated['targets'] as $t) {
-                AgendaTarget::create([
-                    'agenda_id'    => $agenda->id,
-                    'target_type'  => $t['type'],
-                    'target_value' => $t['value'],
-                ]);
-            }
-        });
-
-        return response()->json(['message' => 'Target peserta agenda berhasil diperbarui.', 'data' => $agenda->targets]);
-    }
-}
-````
-
-## File: app/Http/Controllers/EventController.php
-````php
-<?php
-
-namespace App\Http\Controllers;
-
-use App\Http\Resources\EventResource;
-use App\Models\Event;
-use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
-
-class EventController extends Controller
-{
-    public function index(Request $request): JsonResponse
-    {
-        $events = Event::with('committees.user')
-            ->when($request->search, fn ($q, $search) =>
-                $q->where('name', 'like', "%{$search}%")
-            )
-            ->latest()
-            ->paginate(15);
-
-        return response()->json([
-            'message' => 'Success',
-            'data'    => $events,
-        ]);
-    }
-
-    public function store(Request $request): JsonResponse
-    {
-        $validated = $request->validate([
-            'name'              => ['required', 'string', 'max:255'],
-            'description'       => ['nullable', 'string'],
-            'budget_approved'   => ['required', 'numeric', 'min:0'],
-            'drive_folder_url'  => ['nullable', 'string', 'max:255'],
-            'document_sync_url' => ['nullable', 'string', 'max:255'],
-            'finance_sync_url'  => ['nullable', 'string', 'max:255'],
-            'start_date'        => ['required', 'date'],
-            'end_date'          => ['nullable', 'date', 'after_or_equal:start_date'],
-        ]);
-
-        $event = Event::create($validated);
-
-        return response()->json([
-            'message' => 'Success',
-            'data'    => $event->load('committees.user'),
-        ], 201);
-    }
-
-    public function update(Request $request, Event $event): JsonResponse
-    {
-        $validated = $request->validate([
-            'name'              => ['required', 'string', 'max:255'],
-            'description'       => ['nullable', 'string'],
-            'budget_approved'   => ['required', 'numeric', 'min:0'],
-            'drive_folder_url'  => ['nullable', 'string', 'max:255'],
-            'document_sync_url' => ['nullable', 'string', 'max:255'],
-            'finance_sync_url'  => ['nullable', 'string', 'max:255'],
-            'start_date'        => ['required', 'date'],
-            'end_date'          => ['nullable', 'date', 'after_or_equal:start_date'],
-        ]);
-
-        $event->update($validated);
-
-        return response()->json([
-            'message' => 'Success',
-            'data'    => $event->load('committees.user'),
-        ]);
-    }
-
-    public function destroy(Event $event): JsonResponse
-    {
-        $event->delete();
-
-        return response()->json([
-            'message' => 'Success',
-        ]);
-    }
-}
-````
-
 ## File: app/Http/Resources/FinanceResource.php
 ````php
 <?php
@@ -5883,6 +6378,110 @@ class AppServiceProvider extends ServiceProvider
 }
 ````
 
+## File: tests/Feature/AgendaTest.php
+````php
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\Agenda;
+use App\Models\Event;
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Spatie\Permission\Models\Role;
+use Tests\TestCase;
+
+class AgendaTest extends TestCase
+{
+    use RefreshDatabase;
+
+    protected User $user;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        Role::firstOrCreate(['name' => 'member', 'guard_name' => 'web']);
+        $this->user = User::factory()->create();
+        $this->user->assignRole('member');
+    }
+
+    public function test_can_list_agendas_with_strict_event_filtering(): void
+    {
+        $event = Event::factory()->create();
+
+        Agenda::create([
+            'title'      => 'BPH Pusat Agenda',
+            'start_date' => now(),
+            'event_id'   => null,
+        ]);
+
+        Agenda::create([
+            'title'      => 'Event Agenda',
+            'start_date' => now(),
+            'event_id'   => $event->id,
+        ]);
+
+        // Query without event_id -> should return BPH Pusat agenda only
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->getJson('/api/agendas');
+
+        $response->assertStatus(200);
+        $response->assertJsonCount(1, 'data');
+        $response->assertJsonFragment(['title' => 'BPH Pusat Agenda']);
+
+        // Query with event_id -> should return event agenda only
+        $responseEvent = $this->actingAs($this->user, 'sanctum')
+            ->getJson('/api/agendas?event_id=' . $event->id);
+
+        $responseEvent->assertStatus(200);
+        $responseEvent->assertJsonCount(1, 'data');
+        $responseEvent->assertJsonFragment(['title' => 'Event Agenda']);
+    }
+
+    public function test_can_set_agenda_targets(): void
+    {
+        $agenda = Agenda::create([
+            'title'      => 'Rapat Pleno',
+            'start_date' => now(),
+        ]);
+
+        $payload = [
+            'targets' => [
+                ['type' => 'all', 'value' => null],
+                ['type' => 'division', 'value' => '1'],
+                ['type' => 'coordinator', 'value' => null],
+            ],
+        ];
+
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->postJson("/api/agendas/{$agenda->id}/targets", $payload);
+
+        $response->assertStatus(200);
+        $this->assertDatabaseCount('agenda_targets', 3);
+        $this->assertDatabaseHas('agenda_targets', [
+            'agenda_id'   => $agenda->id,
+            'target_type' => 'division',
+            'target_value' => '1',
+        ]);
+    }
+
+    public function test_sync_fails_when_event_agenda_sync_url_is_missing(): void
+    {
+        $event = Event::factory()->create([
+            'agenda_sync_url' => null,
+        ]);
+
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->postJson('/api/agendas/sync', ['event_id' => $event->id]);
+
+        $response->assertStatus(400);
+        $response->assertJsonFragment([
+            'message' => 'URL Sinkronisasi Agenda untuk Event ini belum diatur.',
+        ]);
+    }
+}
+````
+
 ## File: composer.json
 ````json
 {
@@ -5975,230 +6574,470 @@ class AppServiceProvider extends ServiceProvider
 }
 ````
 
-## File: app/Http/Controllers/UserController.php
+## File: app/Http/Controllers/EventController.php
 ````php
 <?php
+
 namespace App\Http\Controllers;
 
-use App\Models\User;
+use App\Http\Resources\EventResource;
+use App\Models\Event;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
-class UserController extends Controller
+class EventController extends Controller
 {
-    public function index(Request $request)
+    public function index(Request $request): JsonResponse
     {
-        $query = User::with(['roles', 'division'])
-            ->when($request->search, fn ($q, $search) => 
+        $events = Event::with('committees.user')
+            ->when($request->search, fn ($q, $search) =>
                 $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('email', 'like', "%{$search}%")
             )
-            ->latest();
-            
-        // FIX: Bypass pagination jika diminta oleh Modal Absensi
-        if ($request->boolean('all')) {
-            return response()->json(['data' => $query->get()]);
-        }
-
-        return response()->json($query->paginate(15));
-    }
-
-    public function update(Request $request, User $user)
-    {
-        $validated = $request->validate([
-            'division_id'    => 'nullable|exists:divisions,id',
-            'status'         => 'required|in:active,suspended',
-            'role'           => 'required|in:admin,member,advisor',
-            'is_coordinator' => 'required|boolean',
-        ]);
-
-        $user->update([
-            'division_id'    => $validated['division_id'],
-            'status'         => $validated['status'],
-            'is_coordinator' => $validated['is_coordinator'],
-        ]);
-
-        $user->syncRoles([$validated['role']]);
+            ->latest()
+            ->paginate(15);
 
         return response()->json([
-            'message' => 'Pengguna berhasil diperbarui',
-            'data'    => $user->load(['roles', 'division']),
+            'message' => 'Success',
+            'data'    => $events,
+        ]);
+    }
+
+    public function store(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'name'              => ['required', 'string', 'max:255'],
+            'description'       => ['nullable', 'string'],
+            'budget_approved'   => ['required', 'numeric', 'min:0'],
+            'drive_folder_url'  => ['nullable', 'string', 'max:255'],
+            'document_sync_url' => ['nullable', 'string', 'max:255'],
+            'finance_sync_url'  => ['nullable', 'string', 'max:255'],
+            'agenda_sync_url'   => ['nullable', 'string', 'max:255'],
+            'start_date'        => ['required', 'date'],
+            'end_date'          => ['nullable', 'date', 'after_or_equal:start_date'],
+        ]);
+
+        $event = Event::create($validated);
+
+        return response()->json([
+            'message' => 'Success',
+            'data'    => $event->load('committees.user'),
+        ], 201);
+    }
+
+    public function update(Request $request, Event $event): JsonResponse
+    {
+        $validated = $request->validate([
+            'name'              => ['required', 'string', 'max:255'],
+            'description'       => ['nullable', 'string'],
+            'budget_approved'   => ['required', 'numeric', 'min:0'],
+            'drive_folder_url'  => ['nullable', 'string', 'max:255'],
+            'document_sync_url' => ['nullable', 'string', 'max:255'],
+            'finance_sync_url'  => ['nullable', 'string', 'max:255'],
+            'agenda_sync_url'   => ['nullable', 'string', 'max:255'],
+            'start_date'        => ['required', 'date'],
+            'end_date'          => ['nullable', 'date', 'after_or_equal:start_date'],
+        ]);
+
+        $event->update($validated);
+
+        return response()->json([
+            'message' => 'Success',
+            'data'    => $event->load('committees.user'),
+        ]);
+    }
+
+    public function destroy(Event $event): JsonResponse
+    {
+        $event->delete();
+
+        return response()->json([
+            'message' => 'Success',
         ]);
     }
 }
 ````
 
-## File: app/Models/Event.php
+## File: app/Http/Controllers/MonthlyDueController.php
 ````php
 <?php
-namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\SoftDeletes;
+namespace App\Http\Controllers;
 
-class Event extends Model {
-    use HasFactory, SoftDeletes;
+use App\Models\MonthlyDue;
+use App\Models\User;
+use App\Services\SyncService;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
-    protected $fillable = [
-        'name', 'description', 'budget_approved', 
-        'drive_folder_url', 'start_date', 'end_date',
-        'document_sync_url', 'finance_sync_url',
-    ];
+class MonthlyDueController extends Controller
+{
+    public function __construct(private readonly SyncService $syncService) {}
 
-    // Konversi presisi data otomatis
-    protected $casts = [
-        'budget_approved' => 'decimal:2',
-        'start_date'      => 'date',
-        'end_date'        => 'date',
-    ];
-
-    public function finances(): HasMany {
-        return $this->hasMany(Finance::class);
+    public function index(): JsonResponse
+    {
+        // Mengembalikan struktur untuk Heatmap Frontend
+        // PENGECUALIAN: Sembunyikan role 'advisor' dari tabel tagihan kas
+        // INJEKSI: Tambahkan 'division' ke Eager Loading untuk kebutuhan Filter/UI Frontend
+        $users = User::with(['roles', 'division'])
+            ->whereDoesntHave('roles', fn($q) => $q->where('name', 'advisor'))
+            ->get();
+            
+        $dues = MonthlyDue::all();
+        
+        return response()->json([
+            'users' => $users,
+            'dues'  => $dues,
+        ]);
     }
 
-    public function committees(): HasMany {
-        return $this->hasMany(EventCommittee::class);
+    public function sync(Request $request): JsonResponse
+    {
+        $url = env('TRACKING_KAS_URL');
+        if (!$url) return response()->json(['message' => 'URL Sinkronisasi belum dikonfigurasi.'], 500);
+
+        try {
+            return response()->json($this->syncService->syncMonthlyDues($url));
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'Gagal menyinkronisasi data kas.', 'error' => $e->getMessage()], 500);
+        }
     }
 }
 ````
 
-## File: app/Services/DashboardService.php
+## File: app/Services/SyncService.php
 ````php
 <?php
 
 namespace App\Services;
 
 use App\Models\Agenda;
-use App\Models\Event;
+use App\Models\Document;
 use App\Models\Finance;
 use App\Models\MonthlyDue;
+use App\Models\User;
 use Carbon\Carbon;
-use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Exception;
 
-class DashboardService
+class SyncService
 {
-    public function getStatistics(): array
+    private function fetchCsv(string $url): array
     {
-        $now  = Carbon::now();
-        $user = Auth::user();
-
-        // 1. HITUNG TUNGGAKAN KAS PENGURUS (Personal)
-        $unpaidMonths = 0;
+        $separator = str_contains($url, '?') ? '&' : '?';
+        $freshUrl = $url . $separator . 'cb=' . time();
+        $context = stream_context_create(['http' => ['header' => "Cache-Control: no-cache\r\n"]]);
+        $csvData = file_get_contents($freshUrl, false, $context);
         
-        // PENGECUALIAN: Pembina (Advisor) tidak ditagih kas
-        if ($user && !$user->hasRole('advisor')) {
-            $startMonth   = 10;
-            $currentMonth = $now->month;
-            $currentYear  = $now->year;
-            
-            if ($currentMonth >= 10) {
-                $monthsPassed = $currentMonth - 10 + 1; // Okt, Nov, Des
-            } else {
-                $monthsPassed = (12 - 10 + 1) + $currentMonth; // Okt - Des + Jan - Current
-            }
-            
-            $paidMonthsCount = MonthlyDue::where('user_id', $user->id)
-                ->where(function ($query) use ($currentYear) {
-                    $query->where('year', $currentYear)
-                          ->orWhere('year', $currentYear - 1);
-                })->count();
+        if (!$csvData) throw new Exception("Gagal mengunduh data dari URL Spreadsheet.");
+        
+        return array_map('str_getcsv', explode("\n", $csvData));
+    }
 
-            if ($monthsPassed > 0) {
-                $maxObligation = min($monthsPassed, 9);
-                $unpaidMonths  = max(0, $maxObligation - $paidMonthsCount);
+    private function findColIndex(array $header, array $keywords): int|false
+    {
+        foreach ($header as $index => $colName) {
+            $cleanColName = strtolower(trim($colName));
+            foreach ($keywords as $keyword) {
+                if (str_contains($cleanColName, strtolower(trim($keyword)))) {
+                    return $index;
+                }
+            }
+        }
+        return false;
+    }
+
+    private function extractVal(array $row, int|bool $index): ?string
+    {
+        if ($index === false || !isset($row[$index])) return null;
+        $val = trim($row[$index]);
+        return (strtolower($val) === 'nan' || $val === '') ? null : $val;
+    }
+
+    public function syncMonthlyDues(string $url): array
+    {
+        $rows = $this->fetchCsv($url);
+        $idIdx = false;
+        $dataStartIndex = 0;
+        $bulanMap = [
+            'januari' => 1, 'februari' => 2, 'maret' => 3, 'april' => 4,
+            'mei' => 5, 'juni' => 6, 'juli' => 7, 'agustus' => 8,
+            'september' => 9, 'oktober' => 10, 'november' => 11, 'desember' => 12
+        ];
+        $bulanIndexes = [];
+
+        foreach ($rows as $index => $row) {
+            $cleanRow = array_map(fn($v) => strtolower(trim($v)), $row);
+            
+            if ($idIdx === false) {
+                $idIdx = $this->findColIndex($cleanRow, ['id user', 'id anggota']);
+            }
+
+            if ($this->findColIndex($cleanRow, ['oktober', 'januari']) !== false) {
+                $dataStartIndex = $index + 1;
+                foreach ($bulanMap as $namaBulan => $angkaBulan) {
+                    $idx = $this->findColIndex($cleanRow, [$namaBulan]);
+                    if ($idx !== false) {
+                        $bulanIndexes[$namaBulan] = ['index' => $idx, 'month_num' => $angkaBulan];
+                    }
+                }
+                break;
             }
         }
 
-        // 2. HITUNG PARTISIPASI AGENDA (Daftar 5 Agenda Terakhir - Gamifikasi)
-        $lastAgendas = Agenda::with('attendances')
-            ->whereHas('attendances') // Hanya agenda yang sudah ada absennya
-            ->where('start_date', '<=', $now) // Hanya agenda masa lalu/hari ini
-            ->orderBy('start_date', 'desc')
-            ->take(5)
-            ->get();
+        if (empty($bulanIndexes) || $idIdx === false) throw new Exception('Format Header Kas tidak ditemukan.');
 
-        $participationList = $lastAgendas->map(function ($agenda) {
-            $totalParticipants = $agenda->attendances->count();
-            $presentCount      = $agenda->attendances->whereIn('status', ['present', 'permit'])->count(); // Hadir dan Izin dihitung positif
-            $rate              = $totalParticipants > 0 ? (int) round(($presentCount / $totalParticipants) * 100) : 0;
-            
-            return [
-                'title' => $agenda->title,
-                'rate'  => $rate,
-            ];
+        $successCount = 0;
+        DB::transaction(function () use ($rows, $dataStartIndex, $idIdx, $bulanIndexes, &$successCount) {
+            for ($i = $dataStartIndex; $i < count($rows); $i++) {
+                $row = $rows[$i];
+                if (empty($row) || count($row) < 3) continue;
+
+                $userId = $this->extractVal($row, $idIdx);
+                if (!$userId || !is_numeric($userId)) continue;
+
+                $user = User::find($userId);
+                if (!$user) continue;
+
+                $successCount++;
+                foreach ($bulanIndexes as $bData) {
+                    $valRaw = $this->extractVal($row, $bData['index']);
+                    $amount = $valRaw ? (float) preg_replace('/[^0-9]/', '', explode(',', $valRaw)[0]) : 0;
+                    
+                    if ($amount > 0) {
+                        MonthlyDue::updateOrCreate(
+                            ['user_id' => $user->id, 'month' => $bData['month_num'], 'year' => (int) date('Y')], 
+                            ['amount' => $amount]
+                        );
+                    } else {
+                        MonthlyDue::where('user_id', $user->id)
+                            ->where('month', $bData['month_num'])
+                            ->where('year', (int) date('Y'))
+                            ->delete();
+                    }
+                }
+            }
         });
 
-        // 3. STATISTIK KAS UMUM
-        $totalIncome  = (float) Finance::where('type', 'income')->whereNull('event_id')->sum('amount');
-        $totalExpense = (float) Finance::where('type', 'expense')->whereNull('event_id')->sum('amount');
-        $totalBalance = $totalIncome - $totalExpense;
-
-        return [
-            'personal_dues' => [
-                'unpaid_months' => $unpaidMonths,
-            ],
-            'agenda_participation' => $participationList, // Mengirimkan Array Daftar Agenda
-            'financial_health' => [
-                'total_balance' => $totalBalance,
-                'chart_data'    => $this->getChartData($now),
-            ],
-        ];
+        return ['message' => "Berhasil: $successCount pengurus disinkronkan."];
     }
 
-    private function getChartData(Carbon $now): array
+    public function syncAgendas(?int $eventId, string $url): array
     {
-        $chartData = [
-            'Kas Umum' => $this->generateTimeSeriesData(null, $now)
-        ];
-
-        // Ambil semua Event yang memiliki transaksi keuangan (Kas Event)
-        $eventsWithFinances = Event::whereHas('finances')->get();
-
-        foreach ($eventsWithFinances as $event) {
-            $chartData[$event->name] = $this->generateTimeSeriesData($event->id, $now);
-        }
-
-        return $chartData;
-    }
-
-    private function generateTimeSeriesData(?int $eventId, Carbon $now): array
-    {
-        $series = [];
-        for ($i = 5; $i >= 0; $i--) {
-            $targetDate = $now->copy()->subMonths($i);
-            $queryIncome = Finance::where('type', 'income')
-                ->whereMonth('date', $targetDate->month)
-                ->whereYear('date', $targetDate->year);
-            $queryExpense = Finance::where('type', 'expense')
-                ->whereMonth('date', $targetDate->month)
-                ->whereYear('date', $targetDate->year);
-
-            if ($eventId) {
-                $queryIncome->where('event_id', $eventId);
-                $queryExpense->where('event_id', $eventId);
-            } else {
-                $queryIncome->whereNull('event_id');
-                $queryExpense->whereNull('event_id');
+        $rows = $this->fetchCsv($url);
+        $header = [];
+        $dataStartIndex = 0;
+        
+        foreach ($rows as $index => $row) {
+            $cleanRow = array_map(fn($v) => strtolower(trim($v)), $row);
+            if ($this->findColIndex($cleanRow, ['nama agenda']) !== false && $this->findColIndex($cleanRow, ['tanggal mulai', 'mulai']) !== false) {
+                $header = $cleanRow;
+                $dataStartIndex = $index + 1;
+                break;
             }
-
-            $series[] = [
-                'name'        => $targetDate->translatedFormat('M Y'),
-                'Pemasukan'   => (float) $queryIncome->sum('amount'),
-                'Pengeluaran' => (float) $queryExpense->sum('amount'),
-            ];
         }
-        return $series;
+
+        if (empty($header)) throw new Exception('Format Header Agenda tidak ditemukan.');
+
+        $idx = [
+            'nama'      => $this->findColIndex($header, ['nama agenda', 'kegiatan']),
+            'start'     => $this->findColIndex($header, ['tanggal mulai', 'waktu mulai']),
+            'end'       => $this->findColIndex($header, ['tanggal selesai', 'waktu selesai']),
+            'tempat'    => $this->findColIndex($header, ['tempat', 'lokasi']),
+            'pj'        => $this->findColIndex($header, ['pj/divisi', 'pj', 'penanggungjawab', 'pic']),
+            'status'    => $this->findColIndex($header, ['status', 'keterangan']),
+            'notulensi' => $this->findColIndex($header, ['link notulensi', 'notulensi']),
+        ];
+
+        $parseDate = fn ($d) => $d ? (Carbon::parse(str_replace('/', '-', $d))->format('Y-m-d H:i:s') ?: null) : null;
+
+        $successCount = 0;
+        DB::transaction(function () use ($rows, $dataStartIndex, $idx, $parseDate, $eventId, &$successCount) {
+            for ($i = $dataStartIndex; $i < count($rows); $i++) {
+                $row = $rows[$i];
+                if (empty($row) || count($row) < 3) continue;
+
+                $nama  = $this->extractVal($row, $idx['nama']);
+                $start = $parseDate($this->extractVal($row, $idx['start']));
+                if (!$nama || !$start) continue;
+
+                $agenda = Agenda::firstOrNew([
+                    'event_id'   => $eventId ? (int)$eventId : null,
+                    'title'      => $nama,
+                    'start_date' => $start,
+                ]);
+
+                $agenda->end_date    = $parseDate($this->extractVal($row, $idx['end'])) ?? $agenda->end_date;
+                $agenda->location    = $this->extractVal($row, $idx['tempat']) ?? $agenda->location;
+                $agenda->pic         = $this->extractVal($row, $idx['pj']) ?? $agenda->pic;
+                $agenda->status      = $this->extractVal($row, $idx['status']) ?? $agenda->status;
+                
+                $urlVal = $this->extractVal($row, $idx['notulensi']);
+                $parsedUrl = $urlVal ? filter_var($urlVal, FILTER_VALIDATE_URL) : false;
+                $agenda->minutes_url = $parsedUrl ? $parsedUrl : $agenda->minutes_url;
+
+                $agenda->save();
+                $successCount++;
+            }
+        });
+
+        return ['message' => "Sinkronisasi selesai. Berhasil menyinkronkan $successCount agenda."];
     }
 
-    public function getUpcomingAgenda(): array
+    public function syncDocuments(?int $eventId, string $url, int $userId): array
     {
-        // Ambil SEMUA agenda agar Kalender Frontend bisa menggeser bulan ke masa lalu dan masa depan
-        $agendas = Agenda::orderBy('start_date', 'asc')->get();
+        $rows = $this->fetchCsv($url);
+        $header = [];
+        $dataStartIndex = 0;
 
-        return [
-            'upcoming_meetings' => $agendas, // Tetap menggunakan key ini agar kompatibel dengan state Frontend
+        foreach ($rows as $index => $row) {
+            $cleanRow = array_map(fn($v) => strtolower(trim($v)), $row);
+            if ($this->findColIndex($cleanRow, ['nomor surat']) !== false && $this->findColIndex($cleanRow, ['perihal']) !== false) {
+                $header = $cleanRow;
+                $dataStartIndex = $index + 1;
+                break;
+            }
+        }
+
+        if (empty($header)) throw new Exception('Format Header Dokumen tidak ditemukan.');
+
+        $idx = [
+            'noSurat'     => $this->findColIndex($header, ['nomor surat', 'no surat']),
+            'perihal'     => $this->findColIndex($header, ['perihal', 'judul']),
+            'tglBuat'     => $this->findColIndex($header, ['tanggal dibuat', 'tgl buat']),
+            'tglKegiatan' => $this->findColIndex($header, ['tanggal kegiatan', 'tgl kegiatan', 'pelaksanaan']),
+            'linkSurat'   => $this->findColIndex($header, ['link surat', 'draft']),
+            'linkScan'    => $this->findColIndex($header, ['link scan surat', 'link scan', 'scan']),
         ];
+
+        $parseDate = function ($dateStr) {
+            try { return $dateStr ? Carbon::parse(str_replace('/', '-', $dateStr))->format('Y-m-d') : null; } 
+            catch (\Exception $e) { return null; }
+        };
+
+        $success = 0;
+        DB::transaction(function () use ($rows, $dataStartIndex, $idx, $parseDate, $eventId, $userId, &$success) {
+            for ($i = $dataStartIndex; $i < count($rows); $i++) {
+                $row = $rows[$i];
+                if (empty($row) || count($row) < 3) continue;
+
+                $noSurat = $this->extractVal($row, $idx['noSurat']);
+                if (!$noSurat) continue;
+
+                $perihal = $this->extractVal($row, $idx['perihal']);
+                $tglBuat = $parseDate($this->extractVal($row, $idx['tglBuat'])) ?? now()->toDateString();
+
+                $doc = Document::firstOrNew([
+                    'letter_number' => $noSurat,
+                    'event_id'      => $eventId ? (int)$eventId : null,
+                ]);
+
+                $doc->title = $perihal ?? $doc->title ?? 'Tanpa Judul';
+                
+                $linkSuratVal = $this->extractVal($row, $idx['linkSurat']);
+                $doc->letter_link = ($linkSuratVal && filter_var($linkSuratVal, FILTER_VALIDATE_URL)) ? $linkSuratVal : $doc->letter_link;
+                
+                $linkScanVal = $this->extractVal($row, $idx['linkScan']);
+                $doc->scan_link = ($linkScanVal && filter_var($linkScanVal, FILTER_VALIDATE_URL)) ? $linkScanVal : $doc->scan_link;
+                
+                // NULLIFIER CORRECTION: 
+                // Cabut Smart Upsert (?? $doc->activity_date). Paksa menjadi NULL jika di Spreadsheet kosong!
+                $doc->activity_date = $parseDate($this->extractVal($row, $idx['tglKegiatan']));
+                
+                $doc->created_by = $doc->exists ? $doc->created_by : $userId;
+
+                $doc->timestamps = false;
+                $doc->created_at = $tglBuat . ' 00:00:00';
+                $doc->save();
+                $doc->timestamps = true;
+
+                $success++;
+            }
+        });
+
+        return ['message' => "Sinkronisasi selesai. Berhasil: $success surat."];
+    }
+
+    public function syncFinances(?int $eventId, string $url, int $userId): array
+    {
+        $rows = $this->fetchCsv($url);
+        $header = [];
+        $dataStartIndex = 0;
+
+        foreach ($rows as $index => $row) {
+            $cleanRow = array_map(fn($v) => strtolower(trim($v)), $row);
+            if ($this->findColIndex($cleanRow, ['tipe']) !== false && $this->findColIndex($cleanRow, ['rincian']) !== false) {
+                $header = $cleanRow;
+                $dataStartIndex = $index + 1;
+                break;
+            }
+        }
+
+        if (empty($header)) throw new Exception('Format Header Keuangan tidak ditemukan.');
+
+        $idx = [
+            'tgl'      => $this->findColIndex($header, ['tanggal (yyyy-mm-dd)', 'tanggal', 'tgl']),
+            'tipe'     => $this->findColIndex($header, ['tipe', 'jenis']),
+            'rincian'  => $this->findColIndex($header, ['rincian', 'deskripsi', 'item']),
+            'kategori' => $this->findColIndex($header, ['kategori', 'kelompok']),
+            'vol'      => $this->findColIndex($header, ['volume', 'qty', 'jumlah']),
+            'satuan'   => $this->findColIndex($header, ['satuan', 'unit']),
+            'harga'    => $this->findColIndex($header, ['harga satuan', 'harga', 'unit price']),
+            'sumber'   => $this->findColIndex($header, ['sumber dana', 'sumber']),
+            'pic'      => $this->findColIndex($header, ['penanggungjawab', 'pic', 'pj']),
+            'metode'   => $this->findColIndex($header, ['metode', 'pembayaran']),
+            'nota'     => $this->findColIndex($header, ['link nota', 'nota', 'bukti']),
+            'ket'      => $this->findColIndex($header, ['keterangan', 'ket', 'catatan']),
+        ];
+
+        $parseDate = fn ($d) => $d ? (Carbon::parse(str_replace('/', '-', $d))->format('Y-m-d') ?: null) : null;
+        $parsePrice = fn ($p) => (float) preg_replace('/[^0-9]/', '', explode(',', $p)[0] ?? '0');
+
+        DB::transaction(function () use ($rows, $dataStartIndex, $idx, $parseDate, $parsePrice, $eventId, $userId) {
+            for ($i = $dataStartIndex; $i < count($rows); $i++) {
+                $row = $rows[$i];
+                if (empty($row) || count($row) < 3) continue;
+
+                $rincian = $this->extractVal($row, $idx['rincian']);
+                $tipeRaw = $this->extractVal($row, $idx['tipe']);
+                if (!$rincian || !$tipeRaw) continue;
+
+                $type = (stripos($tipeRaw, 'masuk') !== false || strtolower($tipeRaw) === 'income') ? 'income' : 'expense';
+                $qtyStr = $this->extractVal($row, $idx['vol']);
+                $qty = $qtyStr ? (float)$qtyStr : 1;
+                
+                $priceStr = $this->extractVal($row, $idx['harga']);
+                $price = $priceStr ? $parsePrice($priceStr) : 0;
+                
+                $tgl = $parseDate($this->extractVal($row, $idx['tgl'])) ?? now()->toDateString();
+
+                $finance = Finance::firstOrNew([
+                    'event_id' => $eventId ? (int)$eventId : null,
+                    'type'     => $type,
+                    'title'    => $rincian,
+                    'date'     => $tgl,
+                ]);
+
+                $finance->user_id        = $finance->exists ? $finance->user_id : $userId;
+                $finance->description    = $rincian;
+                $finance->qty            = $qty;
+                $finance->unit           = $this->extractVal($row, $idx['satuan']) ?? $finance->unit;
+                $finance->unit_price     = $price;
+                $finance->amount         = $qty * $price;
+                $finance->category       = $this->extractVal($row, $idx['kategori']) ?? $finance->category;
+                $finance->funding_source = $this->extractVal($row, $idx['sumber']) ?? $finance->funding_source;
+                $finance->pic            = $this->extractVal($row, $idx['pic']) ?? $finance->pic;
+                $finance->payment_method = $this->extractVal($row, $idx['metode']) ?? $finance->payment_method;
+                $finance->notes          = $this->extractVal($row, $idx['ket']) ?? $finance->notes;
+                
+                $urlVal = $this->extractVal($row, $idx['nota']);
+                $parsedUrl = $urlVal ? filter_var($urlVal, FILTER_VALIDATE_URL) : false;
+                $finance->receipt_url    = $parsedUrl ? $parsedUrl : $finance->receipt_url;
+
+                $finance->save();
+            }
+        });
+
+        return ['message' => "Sinkronisasi berhasil."];
     }
 }
 ````
@@ -6425,6 +7264,178 @@ class WarningTest extends TestCase
 }
 ````
 
+## File: app/Http/Controllers/AgendaController.php
+````php
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Http\Resources\AgendaResource;
+use App\Models\Agenda;
+use App\Models\AgendaTarget;
+use App\Models\Event;
+use App\Services\SyncService;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\DB;
+
+class AgendaController extends Controller
+{
+    public function __construct(private readonly SyncService $syncService) {}
+
+    public function index(Request $request): AnonymousResourceCollection
+    {
+        $eventId = $request->input('event_id');
+        $search  = $request->input('search');
+
+        $agendas = Agenda::with(['attendances', 'targets'])
+            ->when($eventId, fn($q) => $q->where('event_id', $eventId), fn($q) => $q->whereNull('event_id'))
+            ->when($search, fn($q) => $q->where('title', 'like', "%{$search}%"))
+            ->orderBy('start_date', 'asc')
+            ->paginate(15);
+
+        return AgendaResource::collection($agendas);
+    }
+
+    public function sync(Request $request): JsonResponse
+    {
+        $eventId = $request->input('event_id');
+
+        if ($eventId) {
+            $event = Event::find($eventId);
+            if (!$event || empty($event->agenda_sync_url)) {
+                return response()->json(['message' => 'URL Sinkronisasi Agenda untuk Event ini belum diatur.'], 400);
+            }
+            $url = $event->agenda_sync_url;
+        } else {
+            $url = env('TRACKING_AGENDA_URL');
+            if (!$url) return response()->json(['message' => 'URL Sinkronisasi Agenda BPH Pusat belum dikonfigurasi di .env'], 500);
+        }
+
+        try {
+            return response()->json($this->syncService->syncAgendas($eventId, $url));
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'Gagal menyinkronisasi data agenda.', 'error' => $e->getMessage()], 500);
+        }
+    }
+
+    public function setTargets(Request $request, $id): JsonResponse
+    {
+        $agenda = Agenda::findOrFail($id);
+        
+        $validated = $request->validate([
+            'targets'          => 'required|array',
+            'targets.*.type'   => 'required|in:all,bph,coordinator,division,position,user',
+            'targets.*.value'  => 'nullable|string',
+        ]);
+
+        DB::transaction(function () use ($agenda, $validated) {
+            // Hapus target lama
+            $agenda->targets()->delete();
+            
+            // Masukkan target baru
+            foreach ($validated['targets'] as $t) {
+                AgendaTarget::create([
+                    'agenda_id'    => $agenda->id,
+                    'target_type'  => $t['type'],
+                    'target_value' => $t['value'],
+                ]);
+            }
+        });
+
+        return response()->json(['message' => 'Target peserta agenda berhasil diperbarui.', 'data' => $agenda->targets]);
+    }
+}
+````
+
+## File: app/Http/Controllers/UserController.php
+````php
+<?php
+namespace App\Http\Controllers;
+
+use App\Models\User;
+use Illuminate\Http\Request;
+
+class UserController extends Controller
+{
+    public function index(Request $request)
+    {
+        $query = User::with(['roles', 'division'])
+            ->when($request->search, fn ($q, $search) => 
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('email', 'like', "%{$search}%")
+            )
+            ->orderBy('name', 'asc'); // Urutkan sesuai alfabet agar rapi
+            
+        // OPTIMASI: Master Data User kini mengembalikan seluruh data (tanpa paginasi 15 baris)
+        // karena jumlah pengurus relatif kecil (30-100) dan butuh akses cepat.
+        return response()->json([
+            'data' => $query->get()
+        ]);
+    }
+
+    public function update(Request $request, User $user)
+    {
+        $validated = $request->validate([
+            'division_id'    => 'nullable|exists:divisions,id',
+            'status'         => 'required|in:active,suspended',
+            'role'           => 'required|in:admin,member,advisor',
+            'is_coordinator' => 'required|boolean',
+        ]);
+
+        $user->update([
+            'division_id'    => $validated['division_id'],
+            'status'         => $validated['status'],
+            'is_coordinator' => $validated['is_coordinator'],
+        ]);
+
+        $user->syncRoles([$validated['role']]);
+
+        return response()->json([
+            'message' => 'Pengguna berhasil diperbarui',
+            'data'    => $user->load(['roles', 'division']),
+        ]);
+    }
+}
+````
+
+## File: app/Models/Event.php
+````php
+<?php
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
+
+class Event extends Model {
+    use HasFactory, SoftDeletes;
+
+    protected $fillable = [
+        'name', 'description', 'budget_approved', 
+        'drive_folder_url', 'start_date', 'end_date',
+        'document_sync_url', 'finance_sync_url', 'agenda_sync_url',
+    ];
+
+    // Konversi presisi data otomatis
+    protected $casts = [
+        'budget_approved' => 'decimal:2',
+        'start_date'      => 'date',
+        'end_date'        => 'date',
+    ];
+
+    public function finances(): HasMany {
+        return $this->hasMany(Finance::class);
+    }
+
+    public function committees(): HasMany {
+        return $this->hasMany(EventCommittee::class);
+    }
+}
+````
+
 ## File: bootstrap/app.php
 ````php
 <?php
@@ -6472,148 +7483,6 @@ return Application::configure(basePath: dirname(__DIR__))
             ], 403);
         });
     })->create();
-````
-
-## File: tests/Feature/DashboardTest.php
-````php
-<?php
-
-namespace Tests\Feature;
-
-use App\Models\Event;
-use App\Models\Finance;
-use App\Models\Agenda;
-use App\Models\AgendaAttendance;
-use App\Models\MonthlyDue;
-use App\Models\User;
-use Carbon\Carbon;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-use Spatie\Permission\Models\Role;
-use Tests\TestCase;
-
-class DashboardTest extends TestCase
-{
-    use RefreshDatabase;
-
-    protected User $user;
-
-    protected function setUp(): void
-    {
-        parent::setUp();
-        Role::firstOrCreate(['name' => 'member', 'guard_name' => 'web']);
-        Role::firstOrCreate(['name' => 'advisor', 'guard_name' => 'web']);
-        $this->user = User::factory()->create();
-        $this->user->assignRole('member');
-    }
-
-    public function test_statistics_calculation_is_accurate(): void
-    {
-        // Arrange
-        $now = Carbon::now();
-        $lastMonth = Carbon::now()->subMonth();
-
-        // 1. Finance - Kas Umum
-        Finance::create([
-            'user_id'    => $this->user->id,
-            'event_id'   => null,
-            'type'       => 'income',
-            'title'      => 'Income Kas Umum',
-            'qty'        => 1,
-            'unit_price' => 1000.00,
-            'amount'     => 1000.00,
-            'date'       => $now->toDateString(),
-        ]);
-        Finance::create([
-            'user_id'    => $this->user->id,
-            'event_id'   => null,
-            'type'       => 'expense',
-            'title'      => 'Expense Kas Umum',
-            'qty'        => 1,
-            'unit_price' => 300.00,
-            'amount'     => 300.00,
-            'date'       => $now->toDateString(),
-        ]);
-
-        // 2. Agenda dengan absensi
-        $agenda = Agenda::create([
-            'title'      => 'Rapat Perdana',
-            'start_date' => $now->copy()->subDay(),
-        ]);
-        AgendaAttendance::create([
-            'agenda_id' => $agenda->id,
-            'user_id'   => $this->user->id,
-            'status'    => 'present',
-        ]);
-
-        // Act
-        $response = $this->actingAs($this->user, 'sanctum')
-            ->getJson('/api/dashboard/statistics');
-
-        // Assert
-        $response->assertStatus(200);
-        $response->assertJsonStructure([
-            'message',
-            'data' => [
-                'personal_dues' => ['unpaid_months'],
-                'agenda_participation' => [
-                    '*' => ['title', 'rate']
-                ],
-                'financial_health' => [
-                    'total_balance',
-                    'chart_data' => ['Kas Umum'],
-                ],
-            ],
-        ]);
-
-        $this->assertEquals(700.00, $response->json('data.financial_health.total_balance'));
-        $this->assertEquals('Rapat Perdana', $response->json('data.agenda_participation.0.title'));
-        $this->assertEquals(100, $response->json('data.agenda_participation.0.rate'));
-    }
-
-    public function test_advisor_is_exempt_from_personal_dues(): void
-    {
-        $advisor = User::factory()->create();
-        $advisor->assignRole('advisor');
-
-        $response = $this->actingAs($advisor, 'sanctum')
-            ->getJson('/api/dashboard/statistics');
-
-        $response->assertStatus(200);
-        $this->assertEquals(0, $response->json('data.personal_dues.unpaid_months'));
-    }
-
-    public function test_upcoming_agenda_returns_all_agendas_chronologically(): void
-    {
-        // Arrange
-        $now = Carbon::now();
-
-        // Past Agenda
-        Agenda::create([
-            'title'      => 'Past Agenda 1',
-            'start_date' => $now->copy()->subDays(5)->toDateTimeString(),
-        ]);
-
-        // Future Agendas
-        for ($i = 1; $i <= 7; $i++) {
-            Agenda::create([
-                'title'      => "Future Agenda $i",
-                'start_date' => $now->copy()->addDays($i)->toDateTimeString(),
-            ]);
-        }
-
-        // Act
-        $response = $this->actingAs($this->user, 'sanctum')
-            ->getJson('/api/dashboard/upcoming-agenda');
-
-        // Assert
-        $response->assertStatus(200);
-        $response->assertJsonCount(8, 'data.upcoming_meetings');
-
-        $meetings = $response->json('data.upcoming_meetings');
-        $this->assertEquals('Past Agenda 1', $meetings[0]['title']);
-        $this->assertEquals('Future Agenda 7', $meetings[7]['title']);
-    }
-}
 ````
 
 ## File: tests/Feature/DocumentTest.php
@@ -6763,6 +7632,303 @@ class WarningController extends Controller
         return response()->json([
             'message' => 'Success',
         ]);
+    }
+}
+````
+
+## File: app/Services/DashboardService.php
+````php
+<?php
+
+namespace App\Services;
+
+use App\Models\Agenda;
+use App\Models\Event;
+use App\Models\Finance;
+use App\Models\MonthlyDue;
+use Carbon\Carbon;
+use Illuminate\Support\Facades\Auth;
+
+class DashboardService
+{
+    /**
+     * MESIN WAKTU PROTIK (PERBAIKAN LOGIKA BACKEND)
+     * Mengembalikan jumlah bulan yang SUDAH BERJALAN dalam periode aktif (Okt - Jun).
+     */
+    private function calculateActiveMonthsPassed(Carbon $now): int
+    {
+        $m = $now->month;
+        
+        // Masa Transisi (Juli, Agustus, September). Periode belum dimulai = 0 tagihan.
+        if ($m >= 7 && $m <= 9) return 0;
+        
+        // Oktober(10) sampai Desember(12)
+        if ($m >= 10 && $m <= 12) return $m - 9;
+        
+        // Januari(1) sampai Juni(6)
+        if ($m >= 1 && $m <= 6) return $m + 3;
+        
+        return 0;
+    }
+
+    public function getStatistics(): array
+    {
+        $now  = Carbon::now();
+        $user = Auth::user();
+
+        // 1. HITUNG TUNGGAKAN KAS PENGURUS (Personal)
+        $unpaidMonths = 0;
+        
+        if ($user && !$user->hasRole('advisor')) {
+            $monthsPassed = $this->calculateActiveMonthsPassed($now);
+            
+            // Hanya hitung tunggakan jika periode sudah dimulai (> 0)
+            if ($monthsPassed > 0) {
+                $currentYear  = $now->year;
+                $paidMonthsCount = MonthlyDue::where('user_id', $user->id)
+                    ->where(function ($query) use ($currentYear) {
+                        // Mencakup tahun kalender saat ini dan sebelumnya untuk periode Okt-Jun
+                        $query->where('year', $currentYear)
+                              ->orWhere('year', $currentYear - 1);
+                    })->count();
+
+                $maxObligation = min($monthsPassed, 9); // Maksimal 9 bulan (Okt-Jun)
+                $unpaidMonths  = max(0, $maxObligation - $paidMonthsCount);
+            }
+        }
+
+        // 2. HITUNG PARTISIPASI AGENDA
+        $lastAgendas = Agenda::withCount([
+                'attendances',
+                'attendances as present_count' => fn($q) => $q->whereIn('status', ['present', 'permit'])
+            ])
+            ->whereHas('attendances')
+            ->where('start_date', '<=', $now)
+            ->orderBy('start_date', 'desc')
+            ->take(5)
+            ->get();
+
+        $participationList = $lastAgendas->map(function ($agenda) {
+            $totalParticipants = $agenda->attendances_count;
+            $presentCount      = $agenda->present_count;
+            $rate              = $totalParticipants > 0 ? (int) round(($presentCount / $totalParticipants) * 100) : 0;
+            
+            return [
+                'title' => $agenda->title,
+                'rate'  => $rate,
+            ];
+        });
+
+        // 3. STATISTIK KAS UMUM
+        $totalIncome  = (float) Finance::where('type', 'income')->whereNull('event_id')->sum('amount');
+        $totalExpense = (float) Finance::where('type', 'expense')->whereNull('event_id')->sum('amount');
+        $totalBalance = $totalIncome - $totalExpense;
+
+        return [
+            'personal_dues' => [
+                'unpaid_months' => $unpaidMonths,
+            ],
+            'agenda_participation' => $participationList,
+            'financial_health' => [
+                'total_balance' => $totalBalance,
+                'chart_data'    => $this->getChartData($now),
+            ],
+        ];
+    }
+
+    private function getChartData(Carbon $now): array
+    {
+        $chartData = [
+            'Kas Umum' => $this->generateTimeSeriesData(null, $now)
+        ];
+
+        $eventsWithFinances = Event::whereHas('finances')->get();
+
+        foreach ($eventsWithFinances as $event) {
+            $chartData[$event->name] = $this->generateTimeSeriesData($event->id, $now);
+        }
+
+        return $chartData;
+    }
+
+    private function generateTimeSeriesData(?int $eventId, Carbon $now): array
+    {
+        $series = [];
+        for ($i = 5; $i >= 0; $i--) {
+            $targetDate = $now->copy()->subMonths($i);
+            $queryIncome = Finance::where('type', 'income')
+                ->whereMonth('date', $targetDate->month)
+                ->whereYear('date', $targetDate->year);
+            $queryExpense = Finance::where('type', 'expense')
+                ->whereMonth('date', $targetDate->month)
+                ->whereYear('date', $targetDate->year);
+
+            if ($eventId) {
+                $queryIncome->where('event_id', $eventId);
+                $queryExpense->where('event_id', $eventId);
+            } else {
+                $queryIncome->whereNull('event_id');
+                $queryExpense->whereNull('event_id');
+            }
+
+            $series[] = [
+                'name'        => $targetDate->translatedFormat('M Y'),
+                'Pemasukan'   => (float) $queryIncome->sum('amount'),
+                'Pengeluaran' => (float) $queryExpense->sum('amount'),
+            ];
+        }
+        return $series;
+    }
+
+    public function getUpcomingAgenda(): array
+    {
+        $agendas = Agenda::orderBy('start_date', 'asc')->get();
+
+        return [
+            'upcoming_meetings' => $agendas,
+        ];
+    }
+}
+````
+
+## File: tests/Feature/DashboardTest.php
+````php
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\Event;
+use App\Models\Finance;
+use App\Models\Agenda;
+use App\Models\AgendaAttendance;
+use App\Models\MonthlyDue;
+use App\Models\User;
+use Carbon\Carbon;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Spatie\Permission\Models\Role;
+use Tests\TestCase;
+
+class DashboardTest extends TestCase
+{
+    use RefreshDatabase;
+
+    protected User $user;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        Role::firstOrCreate(['name' => 'member', 'guard_name' => 'web']);
+        Role::firstOrCreate(['name' => 'advisor', 'guard_name' => 'web']);
+        $this->user = User::factory()->create();
+        $this->user->assignRole('member');
+    }
+
+    public function test_statistics_calculation_is_accurate(): void
+    {
+        // Arrange
+        $now = Carbon::now();
+        $lastMonth = Carbon::now()->subMonth();
+
+        // 1. Finance - Kas Umum
+        Finance::create([
+            'user_id'    => $this->user->id,
+            'event_id'   => null,
+            'type'       => 'income',
+            'title'      => 'Income Kas Umum',
+            'qty'        => 1,
+            'unit_price' => 1000.00,
+            'amount'     => 1000.00,
+            'date'       => $now->toDateString(),
+        ]);
+        Finance::create([
+            'user_id'    => $this->user->id,
+            'event_id'   => null,
+            'type'       => 'expense',
+            'title'      => 'Expense Kas Umum',
+            'qty'        => 1,
+            'unit_price' => 300.00,
+            'amount'     => 300.00,
+            'date'       => $now->toDateString(),
+        ]);
+
+        // 2. Agenda dengan absensi
+        $agenda = Agenda::create([
+            'title'      => 'Rapat Perdana',
+            'start_date' => $now->copy()->subDay(),
+        ]);
+        AgendaAttendance::create([
+            'agenda_id' => $agenda->id,
+            'user_id'   => $this->user->id,
+            'status'    => 'present',
+        ]);
+
+        // Act
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->getJson('/api/dashboard/statistics');
+
+        // Assert
+        $response->assertStatus(200);
+        $response->assertJsonStructure([
+            'message',
+            'data' => [
+                'personal_dues' => ['unpaid_months'],
+                'agenda_participation' => [
+                    '*' => ['title', 'rate']
+                ],
+                'financial_health' => [
+                    'total_balance',
+                    'chart_data' => ['Kas Umum'],
+                ],
+            ],
+        ]);
+
+        $this->assertEquals(700.00, $response->json('data.financial_health.total_balance'));
+        $this->assertEquals('Rapat Perdana', $response->json('data.agenda_participation.0.title'));
+        $this->assertEquals(100, $response->json('data.agenda_participation.0.rate'));
+    }
+
+    public function test_advisor_is_exempt_from_personal_dues(): void
+    {
+        $advisor = User::factory()->create();
+        $advisor->assignRole('advisor');
+
+        $response = $this->actingAs($advisor, 'sanctum')
+            ->getJson('/api/dashboard/statistics');
+
+        $response->assertStatus(200);
+        $this->assertEquals(0, $response->json('data.personal_dues.unpaid_months'));
+    }
+
+    public function test_upcoming_agenda_returns_all_agendas_chronologically(): void
+    {
+        // Arrange
+        $now = Carbon::now();
+
+        // Past Agenda
+        Agenda::create([
+            'title'      => 'Past Agenda 1',
+            'start_date' => $now->copy()->subDays(5)->toDateTimeString(),
+        ]);
+
+        // Future Agendas
+        for ($i = 1; $i <= 7; $i++) {
+            Agenda::create([
+                'title'      => "Future Agenda $i",
+                'start_date' => $now->copy()->addDays($i)->toDateTimeString(),
+            ]);
+        }
+
+        // Act
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->getJson('/api/dashboard/upcoming-agenda');
+
+        // Assert
+        $response->assertStatus(200);
+        $response->assertJsonCount(8, 'data.upcoming_meetings');
+
+        $meetings = $response->json('data.upcoming_meetings');
+        $this->assertEquals('Past Agenda 1', $meetings[0]['title']);
+        $this->assertEquals('Future Agenda 7', $meetings[7]['title']);
     }
 }
 ````
@@ -7000,13 +8166,15 @@ namespace App\Http\Controllers;
 use App\Http\Resources\DocumentResource;
 use App\Models\Document;
 use App\Models\Event;
-use Carbon\Carbon;
+use App\Services\SyncService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class DocumentController extends Controller
 {
+    public function __construct(private readonly SyncService $syncService) {}
+
     public function index(Request $request): AnonymousResourceCollection
     {
         $documents = Document::with(['creator', 'event'])
@@ -7089,93 +8257,8 @@ class DocumentController extends Controller
             if (!$url) return response()->json(['message' => 'URL Sinkronisasi Dokumen BPH Pusat belum dikonfigurasi.'], 500);
         }
 
-        $separator = str_contains($url, '?') ? '&' : '?';
-        $freshUrl = $url . $separator . 'cb=' . time();
-
         try {
-            $context = stream_context_create(['http' => ['header' => "Cache-Control: no-cache\r\n"]]);
-            $csvData = file_get_contents($freshUrl, false, $context);
-            $rows = array_map('str_getcsv', explode("\n", $csvData));
-            
-            $header = [];
-            $dataStartIndex = 0;
-            
-            // FIX: Sanitasi Header menggunakan trim
-            foreach ($rows as $index => $row) {
-                $cleanRow = array_map('trim', $row);
-                if (in_array('Nomor Surat', $cleanRow) && in_array('Perihal', $cleanRow)) {
-                    $header = $cleanRow;
-                    $dataStartIndex = $index + 1;
-                    break;
-                }
-            }
-
-            if (empty($header)) return response()->json(['message' => 'Format Header (Nomor Surat & Perihal) tidak ditemukan.'], 400);
-
-            $noSuratIdx = array_search('Nomor Surat', $header);
-            $perihalIdx = array_search('Perihal', $header);
-            $keteranganIdx = array_search('Keterangan', $header);
-            $tglBuatIdx = array_search('Tanggal Dibuat', $header);
-            $tglKegiatanIdx = array_search('Tanggal Kegiatan', $header);
-            $linkSuratIdx = array_search('Link Surat', $header);
-            $linkScanIdx = array_search('Link Scan Surat', $header);
-
-            $parseDate = function ($dateStr) {
-                try {
-                    return Carbon::parse(str_replace('/', '-', trim($dateStr)))->format('Y-m-d');
-                } catch (\Exception $e) {
-                    return null;
-                }
-            };
-            $parseUrl = function ($urlStr) {
-                return filter_var(trim($urlStr), FILTER_VALIDATE_URL) ? trim($urlStr) : null;
-            };
-
-            $success = 0;
-            $failed = 0;
-
-            for ($i = $dataStartIndex; $i < count($rows); $i++) {
-                // FIX: Sanitasi seluruh isi baris untuk membersihkan spasi tak kasat mata
-                $row = array_map('trim', $rows[$i]);
-                if (empty($row) || count($row) < 3) continue;
-
-                $noSurat = $row[$noSuratIdx] ?? null;
-                $perihal = $row[$perihalIdx] ?? null;
-                
-                // FIX: Validasi ketat terhadap spasi kosong
-                if (empty($noSurat) || strtolower($noSurat) === 'nan') continue;
-
-                $tglBuat = $parseDate(($tglBuatIdx !== false) ? ($row[$tglBuatIdx] ?? null) : null) ?? now()->toDateString();
-                $title = (!empty($perihal) && strtolower($perihal) !== 'nan') ? $perihal : 'Tanpa Judul';
-
-                try {
-                    $doc = Document::updateOrCreate(
-                        [
-                            'letter_number' => $noSurat,
-                            'event_id'      => $eventId ? (int)$eventId : null,
-                        ],
-                        [
-                            'title'         => $title,
-                            'letter_link'   => $parseUrl(($linkSuratIdx !== false) ? ($row[$linkSuratIdx] ?? null) : null),
-                            'scan_link'     => $parseUrl(($linkScanIdx !== false) ? ($row[$linkScanIdx] ?? null) : null),
-                            'activity_date' => $parseDate(($tglKegiatanIdx !== false) ? ($row[$tglKegiatanIdx] ?? null) : null),
-                            'created_by'    => auth()->id() ?? 1,
-                        ]
-                    );
-
-                    $doc->timestamps = false;
-                    $doc->created_at = $tglBuat . ' 00:00:00';
-                    $doc->save();
-                    $doc->timestamps = true;
-
-                    $success++;
-                } catch (\Exception $e) {
-                    $failed++;
-                }
-            }
-
-            return response()->json(['message' => "Sinkronisasi selesai. Berhasil: $success surat. Gagal/Dilewati: $failed surat."]);
-
+            return response()->json($this->syncService->syncDocuments($eventId, $url, auth()->id() ?? 1));
         } catch (\Exception $e) {
             return response()->json(['message' => 'Gagal menyinkronisasi data.', 'error' => $e->getMessage()], 500);
         }
@@ -7193,16 +8276,16 @@ use App\Http\Resources\FinanceResource;
 use App\Models\Event;
 use App\Models\Finance;
 use App\Services\FinanceService;
-use Carbon\Carbon;
+use App\Services\SyncService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
-use Illuminate\Support\Facades\DB;
 
 class FinanceController extends Controller
 {
     public function __construct(
         private readonly FinanceService $financeService,
+        private readonly SyncService $syncService,
     ) {}
 
     public function index(Request $request)
@@ -7226,7 +8309,8 @@ class FinanceController extends Controller
 
         // BYPASS OPTIMASI EXPORT
         if ($request->boolean('export')) {
-            $finances = $query->get();
+            // OPTIMASI: Menggunakan cursor() (Lazy Collection) alih-alih get() agar RAM tidak penuh
+            $finances = $query->cursor();
             return response()->json([
                 'message' => 'Export payload ready',
                 'data' => FinanceResource::collection($finances)
@@ -7324,105 +8408,8 @@ class FinanceController extends Controller
             if (!$url) return response()->json(['message' => 'URL Sinkronisasi Keuangan BPH Pusat belum dikonfigurasi.'], 500);
         }
 
-        $separator = str_contains($url, '?') ? '&' : '?';
-        $freshUrl = $url . $separator . 'cb=' . time();
-
         try {
-            $context = stream_context_create(['http' => ['header' => "Cache-Control: no-cache\r\n"]]);
-            $csvData = file_get_contents($freshUrl, false, $context);
-            $rows = array_map('str_getcsv', explode("\n", $csvData));
-            
-            $header = [];
-            $dataStartIndex = 0;
-            foreach ($rows as $index => $row) {
-                $cleanRow = array_map('trim', $row);
-                $rowString = strtolower(implode(' | ', $cleanRow));
-                if (str_contains($rowString, 'tipe') && str_contains($rowString, 'rincian')) {
-                    $header = $cleanRow;
-                    $dataStartIndex = $index + 1;
-                    break;
-                }
-            }
-
-            if (empty($header)) return response()->json(['message' => 'Format Header tidak ditemukan.'], 400);
-
-            $idx = [
-                'tgl'      => array_search('Tanggal (YYYY-MM-DD)', $header) ?: array_search('Tanggal', $header),
-                'tipe'     => array_search('Tipe (Pemasukan/Pengeluaran)', $header) ?: array_search('Tipe', $header),
-                'rincian'  => array_search('Rincian', $header),
-                'kategori' => array_search('Kategori', $header),
-                'vol'      => array_search('Volume', $header),
-                'satuan'   => array_search('Satuan', $header),
-                'harga'    => array_search('Harga Satuan', $header),
-                'sumber'   => array_search('Sumber Dana', $header),
-                'pic'      => array_search('Penanggungjawab', $header),
-                'metode'   => array_search('Metode', $header),
-                'nota'     => array_search('Link Nota', $header),
-                'ket'      => array_search('Keterangan', $header),
-            ];
-
-            $parseDate = function ($dateStr) {
-                try {
-                    return Carbon::parse(str_replace('/', '-', trim($dateStr)))->format('Y-m-d');
-                } catch (\Exception $e) {
-                    return null;
-                }
-            };
-            $parseUrl = function ($urlStr) {
-                return filter_var(trim($urlStr), FILTER_VALIDATE_URL) ? trim($urlStr) : null;
-            };
-            $parsePrice = function ($priceStr) {
-                return (float) preg_replace('/[^0-9]/', '', explode(',', trim($priceStr))[0] ?? '0');
-            };
-            $val = function($row, $index) {
-                if ($index === false || !isset($row[$index])) return null;
-                $v = trim($row[$index]);
-                return (strtolower($v) === 'nan' || $v === '') ? null : $v;
-            };
-
-            // FIX UTAMA: Menyuntikkan $eventId ke dalam use(...)
-            DB::transaction(function () use ($rows, $dataStartIndex, $idx, $parseDate, $parseUrl, $parsePrice, $val, $eventId) {
-                if ($eventId) {
-                    Finance::where('event_id', $eventId)->delete();
-                } else {
-                    Finance::whereNull('event_id')->delete();
-                }
-
-                for ($i = $dataStartIndex; $i < count($rows); $i++) {
-                    $row = $rows[$i];
-                    if (empty($row) || count($row) < 3) continue;
-
-                    $rincian = $val($row, $idx['rincian']);
-                    $tipeRaw = $val($row, $idx['tipe']);
-                    if (!$rincian || !$tipeRaw) continue;
-
-                    $type = (stripos($tipeRaw, 'masuk') !== false || strtolower($tipeRaw) === 'income') ? 'income' : 'expense';
-                    $qty = (float) ($val($row, $idx['vol']) ?? 1);
-                    $price = $parsePrice($val($row, $idx['harga']));
-
-                    Finance::create([
-                        'user_id'        => auth()->id() ?? 1,
-                        'event_id'       => $eventId ? (int)$eventId : null,
-                        'type'           => $type,
-                        'category'       => $val($row, $idx['kategori']),
-                        'title'          => $rincian,
-                        'description'    => $rincian,
-                        'qty'            => $qty,
-                        'unit'           => $val($row, $idx['satuan']),
-                        'unit_price'     => $price,
-                        'amount'         => $qty * $price,
-                        'funding_source' => $val($row, $idx['sumber']),
-                        'pic'            => $val($row, $idx['pic']),
-                        'payment_method' => $val($row, $idx['metode']),
-                        'receipt_url'    => $parseUrl($val($row, $idx['nota'])),
-                        'notes'          => $val($row, $idx['ket']),
-                        'date'           => $parseDate($val($row, $idx['tgl'])) ?? now()->toDateString(),
-                    ]);
-                }
-            });
-
-            return response()->json(['message' => "Sinkronisasi berhasil."]);
-
+            return response()->json($this->syncService->syncFinances($eventId, $url, auth()->id() ?? 1));
         } catch (\Exception $e) {
             return response()->json(['message' => 'Gagal menyinkronisasi data.', 'error' => $e->getMessage()], 500);
         }
@@ -7438,7 +8425,9 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AgendaAttendanceController;
 use App\Http\Controllers\AgendaController;
+use App\Http\Controllers\ArchiveController;
 use App\Http\Controllers\AuditTrailController;
+use App\Http\Controllers\CommitteePositionController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DivisionController;
 use App\Http\Controllers\DocumentController;
@@ -7448,6 +8437,7 @@ use App\Http\Controllers\FinanceController;
 use App\Http\Controllers\MonthlyDueController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\RoleController;
+use App\Http\Controllers\SettingController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\WarningController;
 
@@ -7476,6 +8466,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/divisions', [DivisionController::class, 'index']);
     Route::get('/event-committees', [EventCommitteeController::class, 'index']);
 
+    // Settings & Archives
+    Route::get('/settings', [SettingController::class, 'index']);
+    Route::apiResource('archives', ArchiveController::class);
+
     // --- CONTEXTUAL AUTH RESOURCES ---
     // (Bisa di-POST/PUT oleh Admin DAN anggota BPH Event via Authorization Policy)
     Route::post('/agendas/sync', [AgendaController::class, 'sync']);
@@ -7490,6 +8484,12 @@ Route::middleware('auth:sanctum')->group(function () {
     // --- STRICT ADMIN WRITE ENDPOINTS ---
     // (HANYA boleh diakses oleh Administrator BPH Pusat)
     Route::middleware('role:admin')->group(function () {
+        // Settings Batch Update
+        Route::post('/settings/batch', [SettingController::class, 'updateBatch']);
+
+        // Master Data Jabatan Kepanitiaan
+        Route::apiResource('committee-positions', CommitteePositionController::class)->except(['show']);
+
         // Audit Trails
         Route::get('/audit-trails', [AuditTrailController::class, 'index']);
 
@@ -7755,4 +8755,44 @@ Sebagai penutup sesi dan peresmian rilis versi 1.0.0, simpan pencapaianmu ke dal
 ### Changed
 - Merevisi algoritma ekstraksi `MonthlyDueController` dan *Personal Dues Delinquency* pada `DashboardService` untuk mem- *filter* eksklusi (*Query Builder Exclusion*) entitas dengan *role* `advisor`. Hal ini mengamankan visibilitas hierarki dan mencegah penagihan iuran fiktif kepada Pembina Organisasi.
 - Merombak arsitektur balasan metrik *Agenda Participation* dari *Single Point Indicator* menjadi
+## [2026-08-25]
+### Changed
+- Merefaktorisasi seluruh operasi manipulasi dan ekstraksi CSV *Cloud Sync* (Agenda, Kas, Dokumen, Keuangan) dari *Controllers* ke dalam lapisan abstraksi `SyncService`. Implementasi ini mengeksekusi prinsip *Separation of Concerns* (SoC) dan memusatkan kapabilitas *Error Handling*.
+- Mengganti arsitektur agregasi *Agenda Participation Rate* pada `DashboardService` dari *Collection iteration* (`->count()`) menuju perhitungan *Database-Level* (`withCount()`). Pendekatan ini mengeleminasi anomali *N+1 Query* dan mencegah *Out of Memory* (OOM) pada komputasi skala besar.
+- Mengimplementasikan `LazyCollection` via metode `->cursor()` pada agregator ekspor `FinanceController` untuk mengoptimalkan *throughput* serialisasi JSON data masif tanpa membebani RAM server.
+## [2026-08-25]
+### Changed
+- Merefaktorisasi algoritma *Cloud Sync Engine* pada `SyncService.php` (Modul Keuangan) dari strategi destruktif *Wipe & Reload* menjadi *Smart Composite Key Upsert* (`firstOrNew`). Evaluasi *Null Coalescing* (`??`) diterapkan untuk melindungi data parsial (PIC, Kategori, Sumber Dana) yang diinput melalui antarmuka web agar tidak tertimpa oleh sel kosong dari Spreadsheet.
+- Mencabut limitasi skema Paginasi (15 baris) pada `UserController.php` (Modul Master Data). Data pengguna kini diekstraksi secara komprehensif (`get()`) dalam satu muatan JSON untuk memfasilitasi visibilitas hierarki pengurus secara utuh tanpa hambatan UX dari fitur tombol *Next/Prev*.
+## [2026-08-25]
+### Fixed
+- Menyelesaikan anomali *Timezone Shift* (+7 Jam offset) yang mendistorsi validitas tampilan waktu kalender dan agenda di *Frontend*. Melakukan standardisasi variabel `'timezone'` pada `config/app.php` dari `UTC` menjadi `Asia/Jakarta` guna menyelaraskan komputasi waktu *Backend* (MySQL & Carbon) dengan interpretasi *Client-Side*.
+## [2026-08-25]
+### Changed
+- Merefaktorisasi `SyncService.php` dengan merestorasi algoritma *Intelligent Column Hunter* (`findColIndex`) setelah melakukan evaluasi *Trade-off Big-O Notation* (memori vs fleksibilitas). Matriks pencarian kini menyertakan kombinasi *Primary Exact Match* (seperti `tanggal (yyyy-mm-dd)`, `pj/divisi`) dari *Spreadsheet* produksi dan *Secondary Fallback Match* (seperti `pic`, `tgl`). Arsitektur ini mengeleminasi kerapuhan sistem terhadap modifikasi *header* Excel sembari mempertahankan kapabilitas *Smart Upsert*.
+## [2026-08-26]
+### Added
+- Menginjeksi *Migration* baru untuk menambahkan atribut `agenda_sync_url` pada entitas `events`, melengkapi trilogi integrasi *Cloud Sync* kepanitiaan (Agenda, Dokumen, Keuangan).
+- Memperluas *Payload State* pada `EventModal.jsx` di *Frontend* dengan tata letak *3-Column Grid* untuk mengakomodasi konfigurasi URL Agenda.
+### Fixed
+- Menambal anomali *Data Bleeding* pada `AgendaController@sync` yang sebelumnya secara buta menarik *Global URL* BPH Pusat untuk setiap ruang kerja. *Endpoint* kini ditenagai oleh arsitektur *Context-Aware Routing* yang memvalidasi *Event ID* dan menyasar URL eksternal yang spesifik untuk tiap kepanitiaan.
+## [2026-08-26]
+### Fixed
+- Menyelaraskan arsitektur *Relative Month Indexing* antara *Frontend* dan *Backend* (pada `DashboardService@calculateActiveMonthsPassed`). Memperbaiki kalkulasi distorsi peringatan tunggakan kas pada periode transisi organisasi (Juli - September) dengan menginisialisasi parameter operasional menjadi `0` tagihan berjalan. Notifikasi agregasi beban hutang (seperti `8 bulan`) pada antarmuka Dasbor Utama kini beroperasi sinkron dan akurat dengan realitas periode kepengurusan.
+## [2026-08-26]
+### Added
+- Mengimplementasikan SDLC Fase 1 (Data Modeling) dan Fase 2 (Core Domain CRUD & TDD) untuk entitas `Setting` dan `Archive`.
+- Membuat migrasi `settings` dan `archives`, Eloquent Model `Setting` & `Archive`, serta `SettingSeeder`.
+- Mengimplementasikan `SettingController` (dengan `updateBatch` terproteksi `role:admin`) dan `ArchiveController` (Full CRUD API dengan *error handling* standar).
+- Membuat pengujian otomatis `ArchiveFeatureTest` dengan cakupan seluruh endpoint dan lulus 100%.
+## [2026-08-26]
+### Changed
+- Melakukan refaktorisasi arsitektur *Database Normalization* pada skema keanggotaan kepanitiaan Event untuk mengeleminasi ancaman *Full Table Scan* (FTS) yang menurunkan performa pada skala data yang besar. 
+- Memisahkan data tekstual jabatan menjadi tabel master mandiri (`committee_positions`) yang dilengkapi indikator otorisasi mutlak berformat boolean (`is_bph`).
+- Mengoptimasi logika filter pada middleware *Contextual Authorization* (`CheckEventBPH`) dari sebelumnya memanfaatkan fungsi `LIKE` (komputasi O(n)) menjadi evaluasi berbasis klausa *Foreign Key Relational* dan *Index Lookup* dengan performa konstan, menjamin stabilitas latensi server API secara permanen.
+## [2026-08-26]
+### Added
+- Mengimplementasikan *RESTful API Controller* (`CommitteePositionController`) untuk mengelola master data jabatan kepanitiaan Event.
+- Menerapkan arsitektur validasi *Request* yang ketat (termasuk *Unique Constraint Ignore* pada operasi Update) dan standardisasi *JSON Error Handling* (HTTP 200, 201, 404, 422, 500).
+- Melindungi *Endpoint* `/api/committee-positions` dengan enkapsulasi otorisasi tingkat tinggi (middleware `role:admin`), menjamin bahwa hanya *Administrator Global* yang memiliki wewenang untuk meregistrasi jabatan baru atau mendelegasikan hak istimewa *Contextual BPH* (`is_bph`).
 ````

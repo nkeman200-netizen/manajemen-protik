@@ -15,6 +15,7 @@ class WarningResource extends JsonResource
             'admin_id'   => $this->admin_id,
             'reason'     => $this->reason,
             'date'       => $this->date?->format('Y-m-d'),
+            'read_at'    => $this->read_at?->toISOString(),
             'created_at' => $this->created_at?->toISOString(),
             'updated_at' => $this->updated_at?->toISOString(),
             'user'       => $this->whenLoaded('user'),

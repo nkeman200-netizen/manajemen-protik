@@ -4,7 +4,9 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AgendaAttendanceController;
 use App\Http\Controllers\AgendaController;
+use App\Http\Controllers\ArchiveController;
 use App\Http\Controllers\AuditTrailController;
+use App\Http\Controllers\CommitteePositionController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DivisionController;
 use App\Http\Controllers\DocumentController;
@@ -14,6 +16,7 @@ use App\Http\Controllers\FinanceController;
 use App\Http\Controllers\MonthlyDueController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\RoleController;
+use App\Http\Controllers\SettingController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\WarningController;
 
@@ -37,10 +40,15 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/agenda-attendances', [AgendaAttendanceController::class, 'index']);
     Route::get('/documents', [DocumentController::class, 'index']);
     Route::get('/warnings', [WarningController::class, 'index']);
+    Route::patch('/warnings/{warning}/read', [WarningController::class, 'markAsRead']);
     Route::get('/finances', [FinanceController::class, 'index']);
     Route::get('/users', [UserController::class, 'index']);
     Route::get('/divisions', [DivisionController::class, 'index']);
     Route::get('/event-committees', [EventCommitteeController::class, 'index']);
+
+    // Settings & Archives
+    Route::get('/settings', [SettingController::class, 'index']);
+    Route::apiResource('archives', ArchiveController::class);
 
     // --- CONTEXTUAL AUTH RESOURCES ---
     // (Bisa di-POST/PUT oleh Admin DAN anggota BPH Event via Authorization Policy)
@@ -56,6 +64,13 @@ Route::middleware('auth:sanctum')->group(function () {
     // --- STRICT ADMIN WRITE ENDPOINTS ---
     // (HANYA boleh diakses oleh Administrator BPH Pusat)
     Route::middleware('role:admin')->group(function () {
+        // Settings Batch Update & Logo Upload
+        Route::post('/settings/batch', [SettingController::class, 'updateBatch']);
+        Route::post('/settings/logo', [SettingController::class, 'uploadLogo']);
+
+        // Master Data Jabatan Kepanitiaan
+        Route::apiResource('committee-positions', CommitteePositionController::class)->except(['show']);
+
         // Audit Trails
         Route::get('/audit-trails', [AuditTrailController::class, 'index']);
 

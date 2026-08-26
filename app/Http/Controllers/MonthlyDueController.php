@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\MonthlyDue;
+use App\Models\Setting;
 use App\Models\User;
 use App\Services\SyncService;
 use Illuminate\Http\JsonResponse;
@@ -31,8 +32,8 @@ class MonthlyDueController extends Controller
 
     public function sync(Request $request): JsonResponse
     {
-        $url = env('TRACKING_KAS_URL');
-        if (!$url) return response()->json(['message' => 'URL Sinkronisasi belum dikonfigurasi.'], 500);
+        $url = Setting::where('key', 'bph_kas_sync_url')->value('value');
+        if (!$url) return response()->json(['message' => 'URL Sinkronisasi Kas belum dikonfigurasi di Pengaturan.'], 500);
 
         try {
             return response()->json($this->syncService->syncMonthlyDues($url));
