@@ -28,6 +28,7 @@ class EventController extends Controller
     {
         $validated = $request->validate([
             'name'              => ['required', 'string', 'max:255'],
+            'abbreviation'      => ['nullable', 'string', 'max:50'],
             'description'       => ['nullable', 'string'],
             'budget_approved'   => ['required', 'numeric', 'min:0'],
             'drive_folder_url'  => ['nullable', 'string', 'max:255'],
@@ -50,6 +51,7 @@ class EventController extends Controller
     {
         $validated = $request->validate([
             'name'              => ['required', 'string', 'max:255'],
+            'abbreviation'      => ['nullable', 'string', 'max:50'],
             'description'       => ['nullable', 'string'],
             'budget_approved'   => ['required', 'numeric', 'min:0'],
             'drive_folder_url'  => ['nullable', 'string', 'max:255'],

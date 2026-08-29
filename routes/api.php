@@ -10,6 +10,7 @@ use App\Http\Controllers\CommitteePositionController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DivisionController;
 use App\Http\Controllers\DocumentController;
+use App\Http\Controllers\DocumentGeneratorController;
 use App\Http\Controllers\EventCommitteeController;
 use App\Http\Controllers\EventController;
 use App\Http\Controllers\FinanceController;
@@ -37,11 +38,14 @@ Route::middleware('auth:sanctum')->group(function () {
     // (Aman diakses semua role yang login untuk keperluan fetch data)
     Route::get('/events', [EventController::class, 'index']);
     Route::get('/agendas', [AgendaController::class, 'index']);
+    Route::get('/agendas/filters', [AgendaController::class, 'filters']);
     Route::get('/agenda-attendances', [AgendaAttendanceController::class, 'index']);
     Route::get('/documents', [DocumentController::class, 'index']);
+    Route::get('/documents/filters', [DocumentController::class, 'filters']);
     Route::get('/warnings', [WarningController::class, 'index']);
     Route::patch('/warnings/{warning}/read', [WarningController::class, 'markAsRead']);
     Route::get('/finances', [FinanceController::class, 'index']);
+    Route::get('/finances/filters', [FinanceController::class, 'filters']);
     Route::get('/users', [UserController::class, 'index']);
     Route::get('/divisions', [DivisionController::class, 'index']);
     Route::get('/event-committees', [EventCommitteeController::class, 'index']);
@@ -57,16 +61,19 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/agenda-attendances/bulk', [AgendaAttendanceController::class, 'bulkSync']);
     Route::post('/finances/sync', [FinanceController::class, 'sync']);
     Route::apiResource('finances', FinanceController::class)->except(['create', 'edit', 'index']);
+    Route::get('/documents/generate-number', [DocumentController::class, 'generateNumber']);
     Route::post('/documents/sync', [DocumentController::class, 'sync']);
+    Route::post('/documents/generate', [DocumentGeneratorController::class, 'generate']);
     Route::apiResource('documents', DocumentController::class)->except(['create', 'edit', 'index']);
     Route::apiResource('events', EventController::class)->except(['create', 'edit', 'index']);
 
     // --- STRICT ADMIN WRITE ENDPOINTS ---
     // (HANYA boleh diakses oleh Administrator BPH Pusat)
     Route::middleware('role:admin')->group(function () {
-        // Settings Batch Update & Logo Upload
+        // Settings Batch Update, Logo Upload & Template Upload
         Route::post('/settings/batch', [SettingController::class, 'updateBatch']);
         Route::post('/settings/logo', [SettingController::class, 'uploadLogo']);
+        Route::post('/settings/templates', [SettingController::class, 'uploadTemplate']);
 
         // Master Data Jabatan Kepanitiaan
         Route::apiResource('committee-positions', CommitteePositionController::class)->except(['show']);

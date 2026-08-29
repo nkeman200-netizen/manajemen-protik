@@ -197,6 +197,10 @@ class SyncService
             'perihal'     => $this->findColIndex($header, ['perihal', 'judul']),
             'tglBuat'     => $this->findColIndex($header, ['tanggal dibuat', 'tgl buat']),
             'tglKegiatan' => $this->findColIndex($header, ['tanggal kegiatan', 'tgl kegiatan', 'pelaksanaan']),
+            'tipe'        => $this->findColIndex($header, ['tipe']),
+            'klasifikasi' => $this->findColIndex($header, ['jenis', 'klasifikasi']), // Kolom "Jenis"
+            'asal'        => $this->findColIndex($header, ['pengirim', 'asal', 'origin']),
+            'tujuan'      => $this->findColIndex($header, ['kepada', 'tujuan', 'destination']),
             'linkSurat'   => $this->findColIndex($header, ['link surat', 'draft']),
             'linkScan'    => $this->findColIndex($header, ['link scan surat', 'link scan', 'scan']),
         ];
@@ -218,12 +222,23 @@ class SyncService
                 $perihal = $this->extractVal($row, $idx['perihal']);
                 $tglBuat = $parseDate($this->extractVal($row, $idx['tglBuat'])) ?? now()->toDateString();
 
+                // Deteksi Tipe (Surat Masuk / Keluar)
+                $tipeRaw = $this->extractVal($row, $idx['tipe']);
+                $type = (stripos($tipeRaw, 'masuk') !== false || stripos($tipeRaw, 'incoming') !== false) ? 'incoming' : 'outgoing';
+                
+                // Ambil Klasifikasi mentah dari Spreadsheet (contoh: "(SPm) Surat Permohonan")
+                $classificationRaw = $this->extractVal($row, $idx['klasifikasi']);
+
                 $doc = Document::firstOrNew([
                     'letter_number' => $noSurat,
                     'event_id'      => $eventId ? (int)$eventId : null,
                 ]);
 
                 $doc->title = $perihal ?? $doc->title ?? 'Tanpa Judul';
+                $doc->type  = $type;
+                $doc->classification = $classificationRaw ?? $doc->classification;
+                $doc->origin = $this->extractVal($row, $idx['asal']) ?? $doc->origin;
+                $doc->destination = $this->extractVal($row, $idx['tujuan']) ?? $doc->destination;
                 
                 $linkSuratVal = $this->extractVal($row, $idx['linkSurat']);
                 $doc->letter_link = ($linkSuratVal && filter_var($linkSuratVal, FILTER_VALIDATE_URL)) ? $linkSuratVal : $doc->letter_link;
@@ -231,8 +246,6 @@ class SyncService
                 $linkScanVal = $this->extractVal($row, $idx['linkScan']);
                 $doc->scan_link = ($linkScanVal && filter_var($linkScanVal, FILTER_VALIDATE_URL)) ? $linkScanVal : $doc->scan_link;
                 
-                // NULLIFIER CORRECTION: 
-                // Cabut Smart Upsert (?? $doc->activity_date). Paksa menjadi NULL jika di Spreadsheet kosong!
                 $doc->activity_date = $parseDate($this->extractVal($row, $idx['tglKegiatan']));
                 
                 $doc->created_by = $doc->exists ? $doc->created_by : $userId;

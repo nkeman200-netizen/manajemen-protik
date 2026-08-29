@@ -45,10 +45,10 @@ class SettingController extends Controller
         ]);
 
         try {
-            $file = $request->file('logo');
+            $file     = $request->file('logo');
             $filename = 'logo_' . time() . '.' . $file->getClientOriginalExtension();
-            $path = $file->storeAs('logos', $filename, 'public');
-            
+            $path     = $file->storeAs('logos', $filename, 'public');
+
             // Menghasilkan absolute URL (e.g. http://localhost:8000/storage/logos/...)
             $url = asset('storage/' . $path);
 
@@ -60,12 +60,38 @@ class SettingController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Logo berhasil diunggah.',
-                'url'     => $url
+                'url'     => $url,
             ], 200);
         } catch (Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Error Asli: ' . $e->getMessage() . ' | Baris: ' . $e->getLine()
+                'message' => 'Error Asli: ' . $e->getMessage() . ' | Baris: ' . $e->getLine(),
+            ], 500);
+        }
+    }
+
+    public function uploadTemplate(Request $request): JsonResponse
+    {
+        $request->validate([
+            'template_type' => 'required|string|in:peminjaman_perlengkapan,peminjaman_tempat,undangan_eksternal,undangan_internal_satu,undangan_internal_banyak,permohonan_kerjasama',
+            'document'      => 'required|file|mimes:docx|max:10240', // Max 10MB
+        ]);
+
+        try {
+            $file     = $request->file('document');
+            $fileName = $request->template_type . '.docx';
+
+            // Simpan dan Timpa (Overwrite) file di storage/app/templates
+            $file->storeAs('templates', $fileName, 'local');
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Template berhasil diperbarui.',
+            ], 200);
+        } catch (Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal mengunggah template: ' . $e->getMessage(),
             ], 500);
         }
     }

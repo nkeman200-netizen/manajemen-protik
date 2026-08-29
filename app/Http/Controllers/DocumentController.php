@@ -22,13 +22,84 @@ class DocumentController extends Controller
                 $q->where(fn ($q) =>
                     $q->where('letter_number', 'like', "%{$search}%")
                       ->orWhere('title', 'like', "%{$search}%")
+                      ->orWhere('origin', 'like', "%{$search}%")
+                      ->orWhere('destination', 'like', "%{$search}%")
                 )
             )
+            ->when($request->type, fn ($q, $type) => $q->where('type', $type))
+            ->when($request->classification_filter, fn ($q, $c) => $q->where('classification', $c))
+            ->when($request->origin_filter, fn ($q, $o) => $q->where('origin', $o))
+            ->when($request->destination_filter, fn ($q, $d) => $q->where('destination', $d))
             ->where('event_id', $request->input('event_id'))
             ->latest()
             ->paginate(15);
 
         return DocumentResource::collection($documents);
+    }
+
+    public function filters(Request $request): JsonResponse
+    {
+        $eventId = $request->query('event_id');
+        $type    = $request->query('type', 'outgoing');
+
+        $query = Document::when($eventId, fn($q) => $q->where('event_id', $eventId), fn($q) => $q->whereNull('event_id'))
+            ->where('type', $type);
+
+        return response()->json([
+            'data' => [
+                'classifications' => (clone $query)->whereNotNull('classification')->where('classification', '!=', '')->distinct()->pluck('classification'),
+                'origins'         => (clone $query)->whereNotNull('origin')->where('origin', '!=', '')->distinct()->pluck('origin'),
+                'destinations'    => (clone $query)->whereNotNull('destination')->where('destination', '!=', '')->distinct()->pluck('destination'),
+            ]
+        ]);
+    }
+
+    public function generateNumber(Request $request): JsonResponse
+    {
+        $type    = $request->query('type', 'peminjaman_perlengkapan');
+        $eventId = $request->query('event_id');
+
+        // 1. Ekstraksi nomor urut terakhir dalam tahun berjalan
+        $currentYear = date('Y');
+        $lastDoc     = Document::whereYear('created_at', $currentYear)
+            ->orderBy('id', 'desc')
+            ->first();
+
+        $nextNumber = 1;
+        if ($lastDoc && $lastDoc->letter_number) {
+            $parts = explode('/', $lastDoc->letter_number);
+            if (isset($parts[0]) && is_numeric($parts[0])) {
+                $nextNumber = (int) $parts[0] + 1;
+            }
+        }
+        $urutan = str_pad($nextNumber, 3, '0', STR_PAD_LEFT);
+
+        // 2. Kode jenis & rute surat
+        $kodeJenis = 'SPm-i'; // Default: Surat Peminjaman internal
+        if (str_contains($type, 'undangan_eksternal')) {
+            $kodeJenis = 'SU-e';
+        } elseif (str_contains($type, 'undangan_internal')) {
+            $kodeJenis = 'SU-i';
+        }
+
+        // 3. Sisipan singkatan Event (opsional)
+        $singkatan = '';
+        if ($eventId) {
+            $event = Event::find($eventId);
+            if ($event && $event->abbreviation) {
+                $cleanAbbr = strtoupper(str_replace(' ', '', $event->abbreviation));
+                $singkatan = "PAN-{$cleanAbbr}/";
+            }
+        }
+
+        // 4. Konversi bulan ke angka Romawi
+        $romawi = ['I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII'];
+        $bulan  = $romawi[(int) date('n') - 1];
+
+        // 5. Rakit string final
+        $hasilNomor = "{$urutan}/{$kodeJenis}/{$singkatan}PROTIC/{$bulan}/{$currentYear}";
+
+        return response()->json(['nomor_surat' => $hasilNomor]);
     }
 
     public function store(Request $request): JsonResponse
@@ -40,6 +111,9 @@ class DocumentController extends Controller
             'event_id'      => ['nullable', 'exists:events,id'],
             'letter_number' => ['required', 'string', 'max:255', 'unique:documents,letter_number'],
             'title'         => ['required', 'string', 'max:255'],
+            'type'          => ['nullable', 'in:incoming,outgoing'],
+            'origin'        => ['nullable', 'string', 'max:255'],
+            'destination'   => ['nullable', 'string', 'max:255'],
             'letter_link'   => ['nullable', 'string', 'max:255'],
             'scan_link'     => ['nullable', 'string', 'max:255'],
             'activity_date' => ['nullable', 'date'],
@@ -58,6 +132,9 @@ class DocumentController extends Controller
             'event_id'      => ['nullable', 'exists:events,id'],
             'letter_number' => ['required', 'string', 'max:255', 'unique:documents,letter_number,' . $document->id],
             'title'         => ['required', 'string', 'max:255'],
+            'type'          => ['nullable', 'in:incoming,outgoing'],
+            'origin'        => ['nullable', 'string', 'max:255'],
+            'destination'   => ['nullable', 'string', 'max:255'],
             'letter_link'   => ['nullable', 'string', 'max:255'],
             'scan_link'     => ['nullable', 'string', 'max:255'],
             'activity_date' => ['nullable', 'date'],

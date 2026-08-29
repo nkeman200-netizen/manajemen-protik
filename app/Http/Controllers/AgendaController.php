@@ -19,16 +19,39 @@ class AgendaController extends Controller
 
     public function index(Request $request): AnonymousResourceCollection
     {
-        $eventId = $request->input('event_id');
-        $search  = $request->input('search');
+        $eventId   = $request->input('event_id');
+        $search    = $request->input('search');
+        $location  = $request->input('location_filter');
+        $status    = $request->input('status_filter');
+        $startDate = $request->input('start_date');
+        $endDate   = $request->input('end_date');
 
         $agendas = Agenda::with(['attendances', 'targets'])
             ->when($eventId, fn($q) => $q->where('event_id', $eventId), fn($q) => $q->whereNull('event_id'))
             ->when($search, fn($q) => $q->where('title', 'like', "%{$search}%"))
+            ->when($location, fn($q) => $q->where('location', 'like', "%{$location}%"))
+            ->when($status, fn($q) => $q->where('status', $status))
+            ->when($startDate && $endDate, fn($q) => $q->whereBetween('start_date', [
+                    $startDate . ' 00:00:00', $endDate . ' 23:59:59'
+                ])
+            )
             ->orderBy('start_date', 'asc')
             ->paginate(15);
 
         return AgendaResource::collection($agendas);
+    }
+
+    public function filters(Request $request): JsonResponse
+    {
+        $eventId = $request->query('event_id');
+        $query   = Agenda::when($eventId, fn($q) => $q->where('event_id', $eventId), fn($q) => $q->whereNull('event_id'));
+
+        return response()->json([
+            'data' => [
+                'locations' => (clone $query)->whereNotNull('location')->where('location', '!=', '')->distinct()->pluck('location'),
+                'statuses'  => (clone $query)->whereNotNull('status')->where('status', '!=', '')->distinct()->pluck('status'),
+            ]
+        ]);
     }
 
     public function sync(Request $request): JsonResponse

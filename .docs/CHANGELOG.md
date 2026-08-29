@@ -288,3 +288,68 @@ Sebagai penutup sesi dan peresmian rilis versi 1.0.0, simpan pencapaianmu ke dal
 - Menginjeksi *Endpoint* `PATCH /api/warnings/{warning}/read` di `WarningController` dengan proteksi otorisasi kepemilikan data (hanya pemilik SP yang dapat menandai telah dibaca).
 - Memperluas `WarningResource` dan `Warning` Eloquent Model dengan casting `datetime` untuk serialisasi ISO8601 ke Frontend.
 - Menambahkan *Feature Test Suite* pada `WarningTest` untuk memvalidasi *happy path* dan penolakan otorisasi (HTTP 403) bagi pengguna lain (100% lulus).
+## [2026-08-28]
+### Added
+- Melakukan ekspansi skema entitas `documents` melalui migrasi `add_type_and_routing_to_documents_table` untuk mendukung klasifikasi jenis surat (`type`: `incoming` / `outgoing`), instansi pengirim (`origin`), dan instansi penerima (`destination`).
+- Memperbarui model Eloquent `Document` ($fillable), `DocumentResource`, serta `DocumentFactory` agar selaras dengan arsitektur perutean surat masuk dan surat keluar.
+- Menginjeksi parameter validasi dan filtering `type`, `origin`, serta `destination` pada `DocumentController`.
+### Changed
+- Merefaktorisasi mesin sinkronisasi dokumen (`syncDocuments` pada `SyncService.php`) dengan *Intelligent Column Hunter* untuk memetakan kolom jenis surat (`type`), instansi asal/pengirim (`origin`), dan instansi tujuan/penerima (`destination`) secara otomatis dari Spreadsheet CSV.
+- Menambahkan algoritma deteksi cerdas untuk menentukan klasifikasi surat masuk (`incoming`) vs surat keluar (`outgoing`) dengan *fallback* aman ke *outgoing*.
+
+## [2026-08-28]
+### Added
+- Mengimplementasikan *Document Generation Engine* menggunakan library `phpoffice/phpword` (`^1.4`).
+- Membuat `DocumentGeneratorController@generate` yang mampu membaca 5 jenis template surat (`.docx`) dari direktori `storage/app/templates/` secara dinamis.
+- Menyuntikkan 10 variabel konteks secara otomatis ke dalam template: `tanggal_surat`, `nomor_surat`, `lampiran`, `ejaan_lampiran`, `tujuan_surat`, `nama_kegiatan`, `detail_undangan`, `hari_tanggal`, `waktu_pelaksanaan`, dan `tempat_pelaksanaan`.
+- Menginjeksi *Endpoint* `POST /api/documents/generate` (terproteksi `auth:sanctum`) yang mengalirkan file `.docx` hasil generasi langsung ke browser sebagai unduhan, dengan file sementara dihapus otomatis pasca pengiriman (`deleteFileAfterSend`).
+- Membuat direktori `storage/app/templates/` sebagai *Template Repository* untuk 5 jenis surat: `peminjaman_perlengkapan`, `peminjaman_tempat`, `undangan_eksternal`, `undangan_internal_satu`, dan `undangan_internal_banyak`.
+
+## [2026-08-28]
+### Added
+- Menginjeksi atribut `abbreviation` (`VARCHAR 50`, nullable) pada entitas `events` melalui migration `add_abbreviation_to_events_table` untuk melengkapi algoritma *Auto-Generator Nomor Surat* di sisi Frontend.
+- Mendaftarkan `abbreviation` ke dalam `$fillable` `Event` Model dan menambahkan aturan validasi `nullable|string|max:50` pada `EventController@store` dan `EventController@update`, menjamin konsistensi pipeline validasi-persistensi data.
+
+## [2026-08-28]
+### Added
+- Mengimplementasikan *API Endpoint* `GET /api/documents/generate-number` pada `DocumentController@generateNumber` untuk merakit nomor surat PROTIC secara otomatis.
+- Algoritma penomoran terdiri dari 5 tahap: (1) Ekstraksi nomor urut terakhir tahun berjalan dari database, (2) Resolusi kode jenis surat (`SPm-i`, `SU-e`, `SU-i`) berdasarkan `template_type`, (3) Sisipan prefiks kepanitiaan `PAN-{SINGKATAN}/` jika `event_id` disertakan dan Event memiliki `abbreviation`, (4) Konversi bulan ke notasi Romawi, dan (5) Perakitan string final berformat `{urutan}/{kode}/{singkatan}PROTIC/{bulan}/{tahun}`.
+
+## [2026-08-28]
+### Fixed
+- Menambal bug `tempnam(): file created in the system's temporary directory` pada `DocumentGeneratorController`. Root cause: `PhpOffice\PhpWord\TemplateProcessor` secara *default* mengandalkan folder `sys_get_temp_dir()` (C:\WINDOWS\Temp) yang tidak memiliki izin tulis pada lingkungan HERD.
+- Solusi: Memanggil `\PhpOffice\PhpWord\Settings::setTempDir($tempDir)` **sebelum** instansiasi `TemplateProcessor`, memaksa PhpWord menggunakan direktori `storage/app/temp` milik Laravel yang terjamin writable.
+
+## [2026-08-29]
+### Added
+- Mengekspansi `DocumentGeneratorController@generate` dengan dukungan template ke-6: `permohonan_kerjasama`, dan menambahkan field `bantuan` (nullable) ke pipeline validasi serta injeksi variabel template.
+- Membuat `SettingController@uploadTemplate` (`POST /api/settings/templates`, terproteksi `role:admin`) untuk mengunggah dan menimpa (*overwrite*) file `.docx` template surat langsung ke `storage/app/templates/` via disk `local`, meniadakan kebutuhan akses server manual.
+
+## [2026-08-28]
+### Changed
+- Merefaktorisasi logika penamaan file unduhan pada `DocumentGeneratorController@generate`. File hasil generasi kini menggunakan nomor surat sebagai nama file (misal: `001 SU-e PROTIC VIII 2026.docx`) alih-alih pola `Draft_TYPE_timestamp.docx` yang tidak deskriptif.
+- Mengimplementasikan pipeline sanitasi dua tahap: (1) `str_replace` untuk menghapus 9 karakter terlarang sistem operasi (`/`, `\`, `:`, `*`, `?`, `"`, `<`, `>`, `|`), dan (2) `preg_replace('/\s+/', ' ')` untuk memampatkan spasi ganda yang muncul akibat penggantian karakter, menghasilkan nama file yang bersih dan OS-safe lintas platform.
+
+## [2026-08-29]
+### Added
+- Mengimplementasikan API Endpoint agregasi opsi filter dinamis (`DISTINCT` queries):
+  - `GET /api/agendas/filters`: Mengembalikan daftar unik `locations` dan `statuses` berbasis konteks `event_id`.
+  - `GET /api/documents/filters`: Mengembalikan daftar unik `titles`, `origins`, dan `destinations` berbasis konteks `event_id` dan `type`.
+### Changed
+- Memperluas query scope pada `AgendaController@index` untuk mendukung filter `location_filter`, `status_filter`, dan rentang tanggal (`start_date` & `end_date` via `whereBetween`).
+- Memperluas query scope pada `DocumentController@index` untuk mendukung filter `title_filter`, `origin_filter`, dan `destination_filter`.
+## [2026-08-29]
+### Added
+- Mengimplementasikan *Endpoint Aggregation Filter* `GET /api/documents/filters` dan `GET /api/agendas/filters` untuk mendukung arsitektur *Zero-Migration Filtering*.
+- Membangun fitur **Panel Filter Grup** pada UI *Agenda* dan *Document*. Mendukung filtering multi-dimensi (Berdasarkan lokasi/destinasi via *Smart Dropdown*, rentang waktu tanggal, dan tipe agregat) tanpa menyebabkan *Full Table Scan* (FTS) berkat kueri *Distinct* dinamis yang diekstraksi dari *database*.
+### Fixed
+- Menambal celah distorsi UI/UX CSS Flexbox (*Overflow Tembus Batas*) pada sub-menu *Tab* halaman *Master Data*. Melalui penyuntikkan deklarasi `overflow-x-auto whitespace-nowrap`, *Container Tab* kini aman digeser horizontal (*scrollable*) di layar berdimensi sempit (*Mobile Devices*).
+- Menyelaraskan struktur respons JSON pada endpoint `GET /api/documents/filters` dan `GET /api/agendas/filters` dengan membungkus payload hasil kueri ke dalam atribut root `data` (`{ "data": { ... } }`). Hal ini menuntaskan isu *Missing Data Wrapper* yang menyebabkan *SWR Paginated Fetcher* di sisi Frontend gagal membaca *array* opsi filter.
+### Added
+- Menginjeksi atribut `classification` (`VARCHAR 100`, nullable) pada tabel `documents` melalui migration `add_classification_to_documents_table` untuk menyimpan jenis/klasifikasi surat mentah dari Spreadsheet.
+- Mendaftarkan `classification` ke dalam `$fillable` `Document` Model serta `DocumentResource` dan `DocumentFactory`.
+### Changed
+- Merefaktorisasi `SyncService@syncDocuments` dengan menambahkan pemetaan kolom `'klasifikasi'` (`['jenis', 'klasifikasi']`) untuk mengekstrak data klasifikasi surat secara langsung/mentah (contoh: `(SPm) Surat Permohonan`) ke kolom `classification` tanpa merusak logika inferensi kolom `type` (`incoming` / `outgoing`).
+- Memperbarui `DocumentController@filters` dan `DocumentController@index` untuk menargetkan agregasi `distinct('classification')` (sebagai `classifications`) menggantikan ekstraksi judul bebas, serta mendukung parameter filter `classification_filter`.
+- Mengimplementasikan *Endpoint Aggregation Filter* `GET /api/finances/filters` pada `FinanceController@filters` untuk mengekstrak opsi unik `categories`, `funding_sources`, dan `payment_methods` berbasis konteks `event_id` secara dinamis.
+- Memperluas query scope pada `FinanceController@index` untuk mendukung filter `category_filter`, `funding_filter`, dan `payment_filter`.

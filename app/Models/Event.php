@@ -10,7 +10,7 @@ class Event extends Model {
     use HasFactory, SoftDeletes;
 
     protected $fillable = [
-        'name', 'description', 'budget_approved', 
+        'name', 'abbreviation', 'description', 'budget_approved',
         'drive_folder_url', 'start_date', 'end_date',
         'document_sync_url', 'finance_sync_url', 'agenda_sync_url',
     ];

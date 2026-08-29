@@ -1,0 +1,75 @@
+version: '3.8'
+
+# ============================================================
+# docker-compose.yml — manajemen-protik
+# Stack: Laravel 11 + PHP 8.3-FPM + Nginx + MariaDB 10.11
+# ============================================================
+
+services:
+
+  # ---------------------------------------------------------
+  # Service: app  (Laravel / PHP-FPM)
+  # ---------------------------------------------------------
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: protik-backend-app
+    container_name: protik_app
+    restart: unless-stopped
+    working_dir: /var/www
+    volumes:
+      - ./:/var/www
+    networks:
+      - protik_network
+    depends_on:
+      - db
+
+  # ---------------------------------------------------------
+  # Service: nginx  (Web Server)
+  # ---------------------------------------------------------
+  nginx:
+    image: nginx:alpine
+    container_name: protik_nginx
+    restart: unless-stopped
+    ports:
+      - "8000:80"
+    volumes:
+      - ./:/var/www
+      - ./docker/nginx/conf.d:/etc/nginx/conf.d/
+    networks:
+      - protik_network
+    depends_on:
+      - app
+
+  # ---------------------------------------------------------
+  # Service: db  (MariaDB 10.11)
+  # ---------------------------------------------------------
+  db:
+    image: mariadb:10.11
+    container_name: protik_db
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${DB_DATABASE:-protik_db}
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-secret}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-secret}
+      MYSQL_USER: ${DB_USERNAME:-protik_user}
+    ports:
+      - "33060:3306"
+    volumes:
+      - protik_db_data:/var/lib/mysql
+    networks:
+      - protik_network
+
+# ---------------------------------------------------------
+# Networks
+# ---------------------------------------------------------
+networks:
+  protik_network:
+    driver: bridge
+
+# ---------------------------------------------------------
+# Volumes
+# ---------------------------------------------------------
+volumes:
+  protik_db_data:

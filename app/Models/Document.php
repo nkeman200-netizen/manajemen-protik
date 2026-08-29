@@ -9,7 +9,7 @@ class Document extends Model {
     use HasFactory;
 
     protected $fillable = [
-        'created_by', 'event_id', 'letter_number', 'title', 'letter_link', 'scan_link', 'activity_date'
+        'created_by', 'event_id', 'letter_number', 'title', 'type', 'classification', 'origin', 'destination', 'letter_link', 'scan_link', 'activity_date'
     ];
 
     protected $casts = [

@@ -32,6 +32,9 @@ class FinanceController extends Controller
             ->when($request->type, fn ($q, $type) =>
                 $q->where('type', $type)
             )
+            ->when($request->category_filter, fn ($q, $c) => $q->where('category', $c))
+            ->when($request->funding_filter, fn ($q, $f) => $q->where('funding_source', $f))
+            ->when($request->payment_filter, fn ($q, $p) => $q->where('payment_method', $p))
             ->where('event_id', $request->input('event_id'))
             ->when($request->start_date && $request->end_date, fn ($q) =>
                 $q->whereBetween('date', [$request->start_date, $request->end_date])
@@ -50,6 +53,20 @@ class FinanceController extends Controller
 
         $finances = $query->paginate(15);
         return FinanceResource::collection($finances);
+    }
+
+    public function filters(Request $request): JsonResponse
+    {
+        $eventId = $request->query('event_id');
+        $query   = Finance::when($eventId, fn($q) => $q->where('event_id', $eventId), fn($q) => $q->whereNull('event_id'));
+
+        return response()->json([
+            'data' => [
+                'categories'      => (clone $query)->whereNotNull('category')->where('category', '!=', '')->distinct()->pluck('category'),
+                'funding_sources' => (clone $query)->whereNotNull('funding_source')->where('funding_source', '!=', '')->distinct()->pluck('funding_source'),
+                'payment_methods' => (clone $query)->whereNotNull('payment_method')->where('payment_method', '!=', '')->distinct()->pluck('payment_method'),
+            ]
+        ]);
     }
 
     public function store(Request $request): JsonResponse

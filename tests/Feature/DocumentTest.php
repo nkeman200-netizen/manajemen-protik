@@ -36,7 +36,7 @@ class DocumentTest extends TestCase
         $response->assertStatus(200);
         $response->assertJsonCount(3, 'data');
         $response->assertJsonStructure([
-            'data' => [['id', 'created_by', 'letter_number', 'title', 'letter_link', 'scan_link', 'activity_date']],
+            'data' => [['id', 'created_by', 'letter_number', 'title', 'type', 'origin', 'destination', 'letter_link', 'scan_link', 'activity_date']],
             'meta' => ['current_page', 'per_page', 'total'],
         ]);
     }
@@ -52,6 +52,9 @@ class DocumentTest extends TestCase
             'event_id'      => $event->id,
             'letter_number' => 'SK-001/PROTIK/2026',
             'title'         => 'Surat Keputusan Panitia',
+            'type'          => 'outgoing',
+            'origin'        => 'Protik',
+            'destination'   => 'BEM',
             'letter_link'   => 'https://drive.google.com/sk-panitia',
             'scan_link'     => 'https://drive.google.com/sk-panitia-scan',
             'activity_date' => '2026-08-25',
@@ -67,6 +70,9 @@ class DocumentTest extends TestCase
         $this->assertDatabaseHas('documents', [
             'letter_number' => 'SK-001/PROTIK/2026',
             'created_by'    => $user->id,
+            'type'          => 'outgoing',
+            'origin'        => 'Protik',
+            'destination'   => 'BEM',
         ]);
     }
 }
