@@ -47,6 +47,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/finances', [FinanceController::class, 'index']);
     Route::get('/finances/filters', [FinanceController::class, 'filters']);
     Route::get('/users', [UserController::class, 'index']);
+    Route::get('/users/filters', [UserController::class, 'filters']);
     Route::get('/divisions', [DivisionController::class, 'index']);
     Route::get('/event-committees', [EventCommitteeController::class, 'index']);
 
@@ -84,6 +85,9 @@ Route::middleware('auth:sanctum')->group(function () {
         // Kas Pengurus (Monthly Dues)
         Route::get('/monthly-dues', [MonthlyDueController::class, 'index']);
         Route::post('/monthly-dues/sync', [MonthlyDueController::class, 'sync']);
+
+        // Master Data Pengurus (Sync & Mutasi)
+        Route::post('/users/sync', [UserController::class, 'sync']);
 
         // Master Data
         Route::put('/users/{user}', [UserController::class, 'update']);

@@ -181,4 +181,25 @@ class ArchiveFeatureTest extends TestCase
             'type' => 'file',
         ]);
     }
+
+    public function test_setting_seeder_includes_all_required_keys(): void
+    {
+        $this->seed(\Database\Seeders\SettingSeeder::class);
+
+        $expectedKeys = [
+            'org_name',
+            'org_logo',
+            'bph_users_sync_url',
+            'bph_agenda_sync_url',
+            'bph_document_sync_url',
+            'bph_finance_sync_url',
+            'bph_kas_sync_url',
+        ];
+
+        foreach ($expectedKeys as $key) {
+            $this->assertDatabaseHas('settings', [
+                'key' => $key,
+            ]);
+        }
+    }
 }

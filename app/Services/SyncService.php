@@ -344,4 +344,113 @@ class SyncService
 
         return ['message' => "Sinkronisasi berhasil."];
     }
+
+    public function syncUsers(string $url): array
+    {
+        $rows = $this->fetchCsv($url);
+        $header = [];
+        $dataStartIndex = 0;
+
+        foreach ($rows as $index => $row) {
+            $cleanRow = array_map(fn($v) => strtolower(trim($v)), $row);
+            if ($this->findColIndex($cleanRow, ['nim', 'npm']) !== false && $this->findColIndex($cleanRow, ['nama']) !== false) {
+                $header = $cleanRow;
+                $dataStartIndex = $index + 1;
+                break;
+            }
+        }
+
+        if (empty($header)) throw new Exception('Format Header Pengurus tidak ditemukan.');
+
+        $idx = [
+            'id'             => $this->findColIndex($header, ['id user', 'id anggota']),
+            'nama'           => $this->findColIndex($header, ['nama lengkap', 'nama']),
+            'divisi'         => $this->findColIndex($header, ['divisi', 'departemen']),
+            'nim'            => $this->findColIndex($header, ['nim', 'npm']),
+            'angkatan'       => $this->findColIndex($header, ['angkatan', 'tahun masuk']),
+            'prodi'          => $this->findColIndex($header, ['prodi', 'program studi']),
+            'email'          => $this->findColIndex($header, ['email', 'surel']),
+            'phone'          => $this->findColIndex($header, ['no. tlp', 'no hp', 'whatsapp']),
+            'address'        => $this->findColIndex($header, ['address', 'alamat']),
+            'status'         => $this->findColIndex($header, ['status', 'keaktifan']),
+            'is_coordinator' => $this->findColIndex($header, ['is coordinator', 'koordinator']),
+            'is_pembina'     => $this->findColIndex($header, ['is pembina', 'pembina']),
+        ];
+
+        $successCount = 0;
+        \Illuminate\Support\Facades\DB::transaction(function () use ($rows, $dataStartIndex, $idx, &$successCount) {
+            for ($i = $dataStartIndex; $i < count($rows); $i++) {
+                $row = $rows[$i];
+                if (empty($row) || count($row) < 3) continue;
+
+                $nama = $this->extractVal($row, $idx['nama']);
+                $nim  = $this->extractVal($row, $idx['nim']);
+                if (!$nama) continue; // Nama wajib ada, NIM boleh kosong untuk pembina
+
+                $emailExtracted = $this->extractVal($row, $idx['email']);
+                $email = ($emailExtracted && filter_var($emailExtracted, FILTER_VALIDATE_EMAIL)) 
+                            ? $emailExtracted 
+                            : strtolower(preg_replace('/[^a-z0-9]/i', '', explode(' ', $nama)[0])) . ($nim ?? '00') . '@protik.com';
+
+                $idVal = $this->extractVal($row, $idx['id']);
+                
+                // Pencarian User Berjenjang
+                $user = null;
+                if ($idVal && is_numeric($idVal)) $user = \App\Models\User::find($idVal);
+                if (!$user && $nim) $user = \App\Models\User::where('nim', $nim)->first();
+                if (!$user) $user = \App\Models\User::where('email', $email)->first();
+                if (!$user) $user = new \App\Models\User();
+
+                $isNewUser = !$user->exists;
+
+                // Resolusi Divisi
+                $divName = $this->extractVal($row, $idx['divisi']);
+                $divId = null;
+                if ($divName) {
+                    $division = \App\Models\Division::firstOrCreate(['name' => $divName]);
+                    $divId = $division->id;
+                }
+
+                // Resolusi Boolean (TRUE/FALSE)
+                $isCoordRaw   = $this->extractVal($row, $idx['is_coordinator']);
+                $isPembinaRaw = $this->extractVal($row, $idx['is_pembina']);
+                
+                $isCoord   = (strtolower((string)$isCoordRaw) === 'true' || $isCoordRaw === '1' || strtolower((string)$isCoordRaw) === 'ya');
+                $isPembina = (strtolower((string)$isPembinaRaw) === 'true' || $isPembinaRaw === '1' || strtolower((string)$isPembinaRaw) === 'ya');
+
+                // Update Atribut
+                $user->name           = $nama;
+                $user->email          = $email;
+                $user->nim            = $nim;
+                $user->division_id    = $divId;
+                $user->angkatan       = $this->extractVal($row, $idx['angkatan']) ?? $user->angkatan;
+                $user->prodi          = $this->extractVal($row, $idx['prodi']) ?? $user->prodi;
+                $user->phone          = $this->extractVal($row, $idx['phone']) ?? $user->phone;
+                $user->address        = $this->extractVal($row, $idx['address']) ?? $user->address;
+                $user->is_coordinator = $isCoord;
+                
+                $statusVal = $this->extractVal($row, $idx['status']);
+                $user->status = (strtolower((string)$statusVal) === 'suspended' || strtolower((string)$statusVal) === 'nonaktif') ? 'suspended' : 'active';
+
+                if ($isNewUser) {
+                    $user->password = \Illuminate\Support\Facades\Hash::make($nim ?? 'password123');
+                }
+
+                $user->save();
+
+                // Resolusi Spatie Roles
+                if ($isPembina) {
+                    $user->syncRoles(['advisor']);
+                } elseif (strtolower((string)$divName) === 'bph') {
+                    $user->syncRoles(['admin']);
+                } else {
+                    $user->syncRoles(['member']);
+                }
+
+                $successCount++;
+            }
+        });
+
+        return ['message' => "Sinkronisasi selesai. Berhasil memperbarui/menambahkan $successCount pengurus."];
+    }
 }
