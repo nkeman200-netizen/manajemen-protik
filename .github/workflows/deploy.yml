@@ -1,39 +1,25 @@
-# name: Deploy Backend to VPS
+name: Deploy to Proxmox VPS
 
-# on:
-#   push:
-#     branches:
-#       - main
+on:
+  push:
+    branches:
+      - main
 
-# jobs:
-#   deploy:
-#     runs-on: ubuntu-latest
-#     steps:
-#       - name: Execute Deployment Scripts via SSH
-#         uses: appleboy/ssh-action@v1.0.3
-#         with:
-#           host: ${{ secrets.VPS_HOST }}
-#           username: ${{ secrets.VPS_USERNAME }}
-#           key: ${{ secrets.VPS_SSH_KEY }}
-#           script: |
-#             # Pindah ke direktori proyek di dalam VPS
-#             cd /path/ke/folder/manajemen-protik
-            
-#             # 1. Tarik kode terbaru dari GitHub
-#             git pull origin main
-            
-#             # 2. Pastikan container menyala dan mutakhir
-#             docker-compose up -d --build
-            
-#             # 3. Instal vendor PHP (Mode Produksi: tanpa package testing/dev)
-#             docker-compose exec -T app composer install --optimize-autoloader --no-dev
-            
-#             # 4. Eksekusi migrasi database otomatis
-#             docker-compose exec -T app php artisan migrate --force
-            
-#             # 5. Pastikan jembatan file gambar selalu tersambung
-#             docker-compose exec -T app php artisan storage:link
-            
-#             # 6. Bersihkan dan kompres ulang cache Laravel agar performa maksimal
-#             docker-compose exec -T app php artisan optimize:clear
-#             docker-compose exec -T app php artisan optimize
+jobs:
+  deploy:
+    runs-on: self-hosted
+
+    steps:
+      - name: Tarik Kode Terbaru
+        run: |
+          cd /var/www/backend-protic
+          git pull origin main
+          
+      - name: Eksekusi Automasi Docker
+        run: |
+          cd /var/www/backend-protic
+          docker compose exec -T app composer install --optimize-autoloader --no-dev
+          docker compose exec -T app php artisan migrate --force
+          docker compose exec -T app php artisan optimize:clear
+          docker compose exec -T app php artisan optimize
+          echo "🚀 Deployment Backend Selesai!"
