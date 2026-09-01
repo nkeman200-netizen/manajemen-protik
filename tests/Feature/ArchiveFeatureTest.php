@@ -189,7 +189,7 @@ class ArchiveFeatureTest extends TestCase
         $expectedKeys = [
             'org_name',
             'org_logo',
-            'bph_users_sync_url',
+            'bph_master_sync_url',
             'bph_agenda_sync_url',
             'bph_document_sync_url',
             'bph_finance_sync_url',

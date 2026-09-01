@@ -7,7 +7,7 @@ return new class extends Migration {
     public function up(): void
     {
         DB::table('settings')->insertOrIgnore([
-            'key'         => 'bph_users_sync_url',
+            'key'         => 'bph_master_sync_url',
             'value'       => '',
             'type'        => 'url',
             'description' => 'URL Sync Master Data Pengurus BPH Pusat',
@@ -18,6 +18,6 @@ return new class extends Migration {
 
     public function down(): void
     {
-        DB::table('settings')->where('key', 'bph_users_sync_url')->delete();
+        DB::table('settings')->where('key', 'bph_master_sync_url')->delete();
     }
 };
