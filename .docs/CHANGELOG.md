@@ -357,3 +357,6 @@ Sebagai penutup sesi dan peresmian rilis versi 1.0.0, simpan pencapaianmu ke dal
 ### Added
 - Mengimplementasikan `dedoc/scramble` untuk *auto-generated* dokumentasi OpenAPI (Swagger) tanpa intervensi manual.
 - Menambahkan otorisasi *Gate* `viewApiDocs` di `AppServiceProvider` untuk mengamankan akses halaman dokumentasi API (`/docs/api`) di lingkungan produksi.
+## [2026-09-02]
+### Added
+- Membuat `ARCHITECTURE.md` untuk mendokumentasikan topologi jaringan *Cloudflare Tunnel*, spesifikasi *Frontend/Backend*, serta alur kerja *Self-Hosted Runner* CI/CD untuk serah-terima kepengurusan UKM PROTIC.
