@@ -360,3 +360,6 @@ Sebagai penutup sesi dan peresmian rilis versi 1.0.0, simpan pencapaianmu ke dal
 ## [2026-09-02]
 ### Added
 - Membuat `ARCHITECTURE.md` untuk mendokumentasikan topologi jaringan *Cloudflare Tunnel*, spesifikasi *Frontend/Backend*, serta alur kerja *Self-Hosted Runner* CI/CD untuk serah-terima kepengurusan UKM PROTIC.
+## [2026-09-02]
+### Changed
+- Merombak total `README.md` bawaan dengan Panduan Kontributor (Contributor Guide) komprehensif, mencakup instruksi setup lokal, prasyarat sistem, dan kewajiban standar *Conventional Commits* untuk pengembang masa depan.
