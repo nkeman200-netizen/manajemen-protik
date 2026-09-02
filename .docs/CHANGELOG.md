@@ -353,3 +353,7 @@ Sebagai penutup sesi dan peresmian rilis versi 1.0.0, simpan pencapaianmu ke dal
 - Memperbarui `DocumentController@filters` dan `DocumentController@index` untuk menargetkan agregasi `distinct('classification')` (sebagai `classifications`) menggantikan ekstraksi judul bebas, serta mendukung parameter filter `classification_filter`.
 - Mengimplementasikan *Endpoint Aggregation Filter* `GET /api/finances/filters` pada `FinanceController@filters` untuk mengekstrak opsi unik `categories`, `funding_sources`, dan `payment_methods` berbasis konteks `event_id` secara dinamis.
 - Memperluas query scope pada `FinanceController@index` untuk mendukung filter `category_filter`, `funding_filter`, dan `payment_filter`.
+## [2026-09-02]
+### Added
+- Mengimplementasikan `dedoc/scramble` untuk *auto-generated* dokumentasi OpenAPI (Swagger) tanpa intervensi manual.
+- Menambahkan otorisasi *Gate* `viewApiDocs` di `AppServiceProvider` untuk mengamankan akses halaman dokumentasi API (`/docs/api`) di lingkungan produksi.
